@@ -247,12 +247,35 @@ document.addEventListener("DOMContentLoaded", function () {
     // into view. This also solves the collapsed-accordion case for free:
     // Bootstrap's collapsed panel is `display: none`, so blocks inside it
     // never report as intersecting until the panel is expanded.
+    //
+    // BUGFIX 2: a one-shot "play once, then unobserve" (the original version
+    // of this fix) only prevents the initial page-load burst -- scrolling
+    // down through many rows still ACCUMULATES more and more simultaneously
+    // -playing/looping videos over time (each one, once started, never
+    // stops), reproducing the exact same resource exhaustion just spread out
+    // over a scroll session instead of instantaneously. Keep observing every
+    // block for its whole lifetime instead: pause both players (decode
+    // stops, already-buffered data is kept, so resuming is instant) the
+    // moment a block scrolls OUT of view, and resume them when it scrolls
+    // back in. This keeps the number of actively-decoding videos bounded to
+    // roughly what's on screen, no matter how far the page is scrolled.
     if ("IntersectionObserver" in window) {
         const videoObserver = new IntersectionObserver(function (entries) {
             entries.forEach(function (entry) {
+                const block = entry.target;
+                const players = [block.querySelector(".video-before"), block.querySelector(".video-after")];
                 if (entry.isIntersecting) {
-                    refreshVideo(entry.target);
-                    videoObserver.unobserve(entry.target);
+                    if (!block.dataset.videoInited) {
+                        block.dataset.videoInited = "1";
+                        refreshVideo(block);
+                    } else {
+                        players.forEach(function (v) {
+                            const p = v.play();
+                            if (p !== undefined) p.catch(function () {});
+                        });
+                    }
+                } else {
+                    players.forEach(function (v) { v.pause(); });
                 }
             });
         }, { rootMargin: "200px" });
