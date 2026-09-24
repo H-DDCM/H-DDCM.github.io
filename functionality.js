@@ -145,14 +145,25 @@ document.addEventListener("DOMContentLoaded", function () {
     // exact src loaded and buffered, resolves immediately instead of
     // re-fetching. Used so both players can be started in lockstep -- see
     // refreshVideo() below.
+    //
+    // BUGFIX: "canplay"/readyState>=3 (HAVE_FUTURE_DATA) only guarantees
+    // enough data for the CURRENT frame plus a little more -- not that the
+    // rest of the file can play through without further buffering. Starting
+    // playback right there meant a heavier file (e.g. DCVC-UF) could
+    // outrun its own buffer moments after starting and visibly stall/freeze
+    // ("stack"), even though the lighter "Ours" side played fine -- and
+    // only the 2nd/3rd loop (file now fully cached) played smoothly.
+    // "canplaythrough"/readyState===4 (HAVE_ENOUGH_DATA) is the browser's
+    // own estimate that the whole file can play through at the current
+    // download rate without stalling -- the right signal to wait for here.
     function loadVideoReady(videoEl, src) {
         return new Promise(function (resolve) {
-            if (videoEl.getAttribute("src") === src && videoEl.readyState >= 3) {
+            if (videoEl.getAttribute("src") === src && videoEl.readyState === 4) {
                 resolve();
                 return;
             }
-            videoEl.addEventListener("canplay", function onReady() {
-                videoEl.removeEventListener("canplay", onReady);
+            videoEl.addEventListener("canplaythrough", function onReady() {
+                videoEl.removeEventListener("canplaythrough", onReady);
                 resolve();
             });
             if (videoEl.getAttribute("src") !== src) {
