@@ -136,29 +136,33 @@ document.addEventListener("DOMContentLoaded", function () {
         return points[parseInt(range.value, 10)];
     }
 
-    function restartVideo(videoEl, src) {
-        // Always restarts from the beginning, whether or not the src itself
-        // changed -- moving the slider or switching "compare to" should
-        // replay both the before/after players from frame 0, in sync, even
-        // for the player whose source didn't change this time (e.g. "Ours"
-        // when only the compare-to method changes).
-        if (videoEl.getAttribute("src") === src) {
-            videoEl.currentTime = 0;
-        } else {
-            videoEl.src = src;
-            videoEl.load(); // a fresh load already starts at time 0
-        }
-        const playPromise = videoEl.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(function () {});
-        }
+    // Loads `src` into `videoEl` and resolves once it can actually play
+    // through the beginning without stalling. If `videoEl` already has this
+    // exact src loaded and buffered, resolves immediately instead of
+    // re-fetching. Used so both players can be started in lockstep -- see
+    // refreshVideo() below.
+    function loadVideoReady(videoEl, src) {
+        return new Promise(function (resolve) {
+            if (videoEl.getAttribute("src") === src && videoEl.readyState >= 3) {
+                resolve();
+                return;
+            }
+            videoEl.addEventListener("canplay", function onReady() {
+                videoEl.removeEventListener("canplay", onReady);
+                resolve();
+            });
+            if (videoEl.getAttribute("src") !== src) {
+                videoEl.src = src;
+                videoEl.load();
+            }
+        });
     }
 
     function updateVideoAfter(block, point) {
         const video = block.dataset.video;
         const ours = point.methods.ours;
-        restartVideo(block.querySelector(".video-after"), `resources/video/${video}/${ours.file}`);
         block.querySelector(".video-after-bpp").textContent = `${formatBpp(ours.bpp)} BPP`;
+        return { videoEl: block.querySelector(".video-after"), src: `resources/video/${video}/${ours.file}` };
     }
 
     function updateVideoBefore(block, point) {
@@ -176,21 +180,49 @@ document.addEventListener("DOMContentLoaded", function () {
 
         beforeLabelEl.innerHTML = methodLabelHtml;
 
+        let src;
         if (method === "original") {
-            restartVideo(beforeVideoEl, `resources/video/${video}/${video}_gt.mp4`);
+            src = `resources/video/${video}/${video}_gt.mp4`;
             beforeBppEl.style.display = "none";
         } else {
             const m = point.methods[method];
-            restartVideo(beforeVideoEl, `resources/video/${video}/${m.file}`);
+            src = `resources/video/${video}/${m.file}`;
             beforeBppEl.style.display = "";
             beforeBppEl.textContent = `${formatBpp(m.bpp)} BPP`;
         }
+        return { videoEl: beforeVideoEl, src: src };
     }
 
     function refreshVideo(block) {
+        // BUGFIX: starting each player as soon as ITS OWN load finished
+        // (the old behavior) meant that whichever method's mp4 happens to be
+        // lighter for a given pair would visibly start moving well before
+        // the heavier one -- looks broken/stuck, not just slower. This is
+        // not specific to any one method (e.g. DCVC-UF is just often the
+        // heaviest); it applies to every before/after pairing. Labels/BPP
+        // captions still update immediately; only the actual playback start
+        // is held back until BOTH players have buffered enough to play,
+        // then both start together, in sync, from frame 0.
         const point = currentVideoPoint(block);
-        updateVideoAfter(block, point);
-        updateVideoBefore(block, point);
+        const after = updateVideoAfter(block, point);
+        const before = updateVideoBefore(block, point);
+
+        const gen = String(parseInt(block.dataset.videoGen || "0", 10) + 1);
+        block.dataset.videoGen = gen;
+        Promise.all([
+            loadVideoReady(after.videoEl, after.src),
+            loadVideoReady(before.videoEl, before.src),
+        ]).then(function () {
+            // A newer refreshVideo() call may have superseded this one while
+            // waiting (rapid method/bpp switching) -- don't stomp on it.
+            if (block.dataset.videoGen !== gen) return;
+            after.videoEl.currentTime = 0;
+            before.videoEl.currentTime = 0;
+            [after.videoEl, before.videoEl].forEach(function (v) {
+                const p = v.play();
+                if (p !== undefined) p.catch(function () {});
+            });
+        });
     }
 
     // Keep the two side-by-side players in lockstep. Both sources are
