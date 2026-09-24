@@ -9,6 +9,13 @@
 // disabled for points that don't carry its method, mirroring how the
 // original build_qualitative_comparison_figure.py silently drops a
 // competitor with no comparable bpp point rather than showing a wrong one.
+//
+// Perf note: every block's data-points JSON and DOM sub-element references
+// are resolved ONCE at setup time (below) rather than re-parsed/re-queried
+// on every slider drag or "compare to" click -- cheap either way at this
+// page's scale, but there's no reason to redo fixed work on every
+// interaction, and it keeps the hot paths (refresh/refreshVideo) doing only
+// the work that actually changes per call.
 
 document.addEventListener("DOMContentLoaded", function () {
     // ---------------------------------------------------------------
@@ -24,17 +31,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // ---------------------------------------------------------------
-    // qualitative comparison blocks
-    // ---------------------------------------------------------------
-    function currentPoint(block) {
-        const points = JSON.parse(block.dataset.points);
-        const range = block.querySelector(".qual-range");
-        // Tiny build: image blocks with a single BPP point have no slider --
-        // fall back to the (only) point at index 0.
-        return points[range ? parseInt(range.value, 10) : 0];
-    }
-
     function formatBpp(bpp) {
         // Up to 3 digits after the decimal point -- round to 3, then trim
         // any trailing zeros (e.g. 0.19968 -> "0.2", not "0.200").
@@ -48,76 +44,89 @@ document.addEventListener("DOMContentLoaded", function () {
         return `${formatBpp(bpp)} BPP<br>${t}`;
     }
 
-    function updateRadioAvailability(block, point) {
-        block.querySelectorAll(".compare-radio").forEach(function (radio) {
-            const method = radio.dataset.method;
-            const available = (method === "original") || Object.prototype.hasOwnProperty.call(point.methods, method);
-            radio.disabled = !available;
-            radio.closest(".btn-group-vertical").querySelector(`label[for="${radio.id}"]`).classList.toggle("disabled", !available);
-        });
-        const checked = block.querySelector(".compare-radio:checked");
-        if (checked.disabled) {
-            const originalRadio = block.querySelector('.compare-radio[data-method="original"]');
-            originalRadio.checked = true;
-        }
-    }
-
-    function updateAfter(block, point) {
+    // ---------------------------------------------------------------
+    // qualitative comparison blocks (images)
+    // ---------------------------------------------------------------
+    function setupQualBlock(block) {
+        const points = JSON.parse(block.dataset.points);
         const dataset = block.dataset.dataset;
-        const ours = point.methods.ours;
-        block.querySelector(".qual-after-img").src = `resources/${dataset}/${ours.file}`;
-        block.querySelector(".qual-after-bpp").innerHTML = formatCaption(ours.bpp, ours.roundtrip_s);
-    }
-
-    function updateBefore(block, point) {
-        const dataset = block.dataset.dataset;
-        const checked = block.querySelector(".compare-radio:checked");
-        const method = checked.dataset.method;
-        // BUGFIX: label text (e.g. "Turbo-DDCM (K=2<sup>14</sup>)") contains
-        // markup -- .textContent strips the <sup> tag but keeps its text,
-        // collapsing "2" + "14" into "214" with no separator. .innerHTML
-        // preserves the tag so the overlay renders the superscript, exactly
-        // like the button's own label does.
-        const methodLabelHtml = checked.nextElementSibling.innerHTML;
-
-        const beforeImg = block.querySelector(".qual-before-img");
-        const beforeLabelEl = block.querySelector(".qual-before-label");
-        const beforeBppEl = block.querySelector(".qual-before-bpp");
-
-        beforeLabelEl.innerHTML = methodLabelHtml;
-
-        if (method === "original") {
-            beforeImg.src = `resources/${dataset}/${block.dataset.img}_gt.png`;
-            beforeBppEl.style.display = "none";
-        } else {
-            const m = point.methods[method];
-            beforeImg.src = `resources/${dataset}/${m.file}`;
-            beforeBppEl.style.display = "";
-            beforeBppEl.innerHTML = formatCaption(m.bpp, m.roundtrip_s);
-        }
-    }
-
-    function refresh(block) {
-        const point = currentPoint(block);
-        updateRadioAvailability(block, point);
-        updateAfter(block, point);
-        updateBefore(block, point);
-    }
-
-    document.querySelectorAll(".qual-block").forEach(function (block) {
+        const img = block.dataset.img;
         const range = block.querySelector(".qual-range");
-        if (range) {
-            range.addEventListener("input", function () {
-                refresh(block);
-            });
-        }
-        block.querySelectorAll(".compare-radio").forEach(function (radio) {
-            radio.addEventListener("change", function () {
-                refresh(block);
-            });
+        const radios = Array.from(block.querySelectorAll(".compare-radio")).map(function (radio) {
+            return { radio: radio, label: block.querySelector(`label[for="${radio.id}"]`), method: radio.dataset.method };
         });
-        refresh(block);
-    });
+        const originalRadio = block.querySelector('.compare-radio[data-method="original"]');
+        const refs = {
+            points: points,
+            dataset: dataset,
+            img: img,
+            range: range,
+            radios: radios,
+            originalRadio: originalRadio,
+            afterImg: block.querySelector(".qual-after-img"),
+            afterBpp: block.querySelector(".qual-after-bpp"),
+            beforeImg: block.querySelector(".qual-before-img"),
+            beforeLabel: block.querySelector(".qual-before-label"),
+            beforeBpp: block.querySelector(".qual-before-bpp"),
+        };
+
+        function currentPoint() {
+            // Tiny build: image blocks with a single BPP point have no
+            // slider -- fall back to the (only) point at index 0.
+            return points[range ? parseInt(range.value, 10) : 0];
+        }
+
+        function updateRadioAvailability(point) {
+            let checkedIsDisabled = false;
+            radios.forEach(function (r) {
+                const available = (r.method === "original") || Object.prototype.hasOwnProperty.call(point.methods, r.method);
+                r.radio.disabled = !available;
+                r.label.classList.toggle("disabled", !available);
+                if (r.radio.checked && !available) checkedIsDisabled = true;
+            });
+            if (checkedIsDisabled) originalRadio.checked = true;
+        }
+
+        function updateAfter(point) {
+            const ours = point.methods.ours;
+            refs.afterImg.src = `resources/${dataset}/${ours.file}`;
+            refs.afterBpp.innerHTML = formatCaption(ours.bpp, ours.roundtrip_s);
+        }
+
+        function updateBefore(point) {
+            const checked = radios.find(function (r) { return r.radio.checked; }).radio;
+            const method = checked.dataset.method;
+            // BUGFIX: label text (e.g. "Turbo-DDCM (K=2<sup>14</sup>)")
+            // contains markup -- .textContent strips the <sup> tag but keeps
+            // its text, collapsing "2" + "14" into "214" with no separator.
+            // .innerHTML preserves the tag so the overlay renders the
+            // superscript, exactly like the button's own label does.
+            refs.beforeLabel.innerHTML = checked.nextElementSibling.innerHTML;
+
+            if (method === "original") {
+                refs.beforeImg.src = `resources/${dataset}/${img}_gt.png`;
+                refs.beforeBpp.style.display = "none";
+            } else {
+                const m = point.methods[method];
+                refs.beforeImg.src = `resources/${dataset}/${m.file}`;
+                refs.beforeBpp.style.display = "";
+                refs.beforeBpp.innerHTML = formatCaption(m.bpp, m.roundtrip_s);
+            }
+        }
+
+        function refresh() {
+            const point = currentPoint();
+            updateRadioAvailability(point);
+            updateAfter(point);
+            updateBefore(point);
+        }
+
+        if (range) range.addEventListener("input", refresh);
+        radios.forEach(function (r) { r.radio.addEventListener("change", refresh); });
+        refresh();
+    }
+
+    document.querySelectorAll(".qual-block").forEach(setupQualBlock);
 
     // ---------------------------------------------------------------
     // video qualitative comparison blocks
@@ -128,13 +137,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // supports <img> content. No round-trip time here -- the source CSV
     // (video_compression/selected_video_bpp_comparison) only records bpp,
     // so only bpp is shown (not fabricated). Every method has data at every
-    // point for these 4 videos, so no radio-disable logic is needed here
+    // point for these videos, so no radio-disable logic is needed here
     // (unlike the image blocks, where a poor bpp match could drop a method).
-    function currentVideoPoint(block) {
-        const points = JSON.parse(block.dataset.points);
-        const range = block.querySelector(".video-range");
-        return points[parseInt(range.value, 10)];
-    }
 
     // Loads `src` into `videoEl` and resolves once it can actually play
     // through the beginning without stalling. If `videoEl` already has this
@@ -158,117 +162,136 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function updateVideoAfter(block, point) {
+    function setupVideoBlock(block) {
+        const points = JSON.parse(block.dataset.points);
         const video = block.dataset.video;
-        const ours = point.methods.ours;
-        block.querySelector(".video-after-bpp").textContent = `${formatBpp(ours.bpp)} BPP`;
-        return { videoEl: block.querySelector(".video-after"), src: `resources/video/${video}/${ours.file}` };
-    }
+        const radios = Array.from(block.querySelectorAll(".compare-radio"));
+        const refs = {
+            points: points,
+            video: video,
+            radios: radios,
+            range: block.querySelector(".video-range"),
+            afterVideo: block.querySelector(".video-after"),
+            afterBpp: block.querySelector(".video-after-bpp"),
+            beforeVideo: block.querySelector(".video-before"),
+            beforeLabel: block.querySelector(".video-before-label"),
+            beforeBpp: block.querySelector(".video-before-bpp"),
+        };
+        let gen = 0; // bumped on every refresh; guards against stale/superseded loads
 
-    function updateVideoBefore(block, point) {
-        const video = block.dataset.video;
-        const checked = block.querySelector(".compare-radio:checked");
-        const method = checked.dataset.method;
-        // Same innerHTML fix as updateBefore() above -- no video method
-        // label currently contains markup, but this keeps both paths
-        // consistent and safe if one ever does (e.g. a future K=... label).
-        const methodLabelHtml = checked.nextElementSibling.innerHTML;
-
-        const beforeVideoEl = block.querySelector(".video-before");
-        const beforeLabelEl = block.querySelector(".video-before-label");
-        const beforeBppEl = block.querySelector(".video-before-bpp");
-
-        beforeLabelEl.innerHTML = methodLabelHtml;
-
-        let src;
-        if (method === "original") {
-            src = `resources/video/${video}/${video}_gt.mp4`;
-            beforeBppEl.style.display = "none";
-        } else {
-            const m = point.methods[method];
-            src = `resources/video/${video}/${m.file}`;
-            beforeBppEl.style.display = "";
-            beforeBppEl.textContent = `${formatBpp(m.bpp)} BPP`;
+        function currentVideoPoint() {
+            return points[parseInt(refs.range.value, 10)];
         }
-        return { videoEl: beforeVideoEl, src: src };
-    }
 
-    function refreshVideo(block) {
-        // BUGFIX: starting each player as soon as ITS OWN load finished
-        // (the old behavior) meant that whichever method's mp4 happens to be
-        // lighter for a given pair would visibly start moving well before
-        // the heavier one -- looks broken/stuck, not just slower. This is
-        // not specific to any one method (e.g. DCVC-UF is just often the
-        // heaviest); it applies to every before/after pairing. Labels/BPP
-        // captions still update immediately; only the actual playback start
-        // is held back until BOTH players have buffered enough to play,
-        // then both start together, in sync, from frame 0.
-        const point = currentVideoPoint(block);
-        const after = updateVideoAfter(block, point);
-        const before = updateVideoBefore(block, point);
+        function updateVideoAfter(point) {
+            const ours = point.methods.ours;
+            refs.afterBpp.textContent = `${formatBpp(ours.bpp)} BPP`;
+            return { videoEl: refs.afterVideo, src: `resources/video/${video}/${ours.file}` };
+        }
 
-        const gen = String(parseInt(block.dataset.videoGen || "0", 10) + 1);
-        block.dataset.videoGen = gen;
-        Promise.all([
-            loadVideoReady(after.videoEl, after.src),
-            loadVideoReady(before.videoEl, before.src),
-        ]).then(function () {
-            // A newer refreshVideo() call may have superseded this one while
-            // waiting (rapid method/bpp switching) -- don't stomp on it.
-            if (block.dataset.videoGen !== gen) return;
+        function updateVideoBefore(point) {
+            const checked = radios.find(function (r) { return r.checked; });
+            const method = checked.dataset.method;
+            // Same innerHTML fix as updateBefore() above -- no video method
+            // label currently contains markup, but this keeps both paths
+            // consistent and safe if one ever does (e.g. a future K=...
+            // label).
+            refs.beforeLabel.innerHTML = checked.nextElementSibling.innerHTML;
+
+            let src;
+            if (method === "original") {
+                src = `resources/video/${video}/${video}_gt.mp4`;
+                refs.beforeBpp.style.display = "none";
+            } else {
+                const m = point.methods[method];
+                src = `resources/video/${video}/${m.file}`;
+                refs.beforeBpp.style.display = "";
+                refs.beforeBpp.textContent = `${formatBpp(m.bpp)} BPP`;
+            }
+            return { videoEl: refs.beforeVideo, src: src };
+        }
+
+        function refreshVideo() {
+            // BUGFIX: starting each player as soon as ITS OWN load finished
+            // (the old behavior) meant that whichever method's mp4 happens
+            // to be lighter for a given pair would visibly start moving
+            // well before the heavier one -- looks broken/stuck, not just
+            // slower (not specific to any one method -- applies to every
+            // before/after pairing). Labels/BPP captions still update
+            // immediately; only the actual playback start is held back
+            // until BOTH players have buffered enough to play, then both
+            // start together, in sync, from frame 0.
+            const point = currentVideoPoint();
+            const after = updateVideoAfter(point);
+            const before = updateVideoBefore(point);
+
+            // Immediate feedback: freeze both players at frame 0 right
+            // away, rather than leaving the old content visibly
+            // playing/looping (or just sitting there looking unresponsive)
+            // for however long the new method's file takes to load. This
+            // fires instantly regardless of load state; the actual resumed
+            // playback below still waits for both to be ready.
+            after.videoEl.pause();
             after.videoEl.currentTime = 0;
+            before.videoEl.pause();
             before.videoEl.currentTime = 0;
-            [after.videoEl, before.videoEl].forEach(function (v) {
-                const p = v.play();
-                if (p !== undefined) p.catch(function () {});
+
+            gen += 1;
+            const myGen = gen;
+            Promise.all([
+                loadVideoReady(after.videoEl, after.src),
+                loadVideoReady(before.videoEl, before.src),
+            ]).then(function () {
+                // A newer refreshVideo() call may have superseded this one
+                // while waiting (rapid method/bpp switching) -- don't stomp
+                // on it.
+                if (myGen !== gen) return;
+                after.videoEl.currentTime = 0;
+                before.videoEl.currentTime = 0;
+                [after.videoEl, before.videoEl].forEach(function (v) {
+                    const p = v.play();
+                    if (p !== undefined) p.catch(function () {});
+                });
             });
-        });
-    }
+        }
 
-    // Keep the two side-by-side players in lockstep. Both sources are
-    // trimmed to the same frame count (see webpage/resources/video), so
-    // native "loop" on each element would still drift apart over many
-    // cycles (two independent <video> elements don't loop in perfect
-    // lockstep). Instead: no native loop attribute; "Ours" is the sync
-    // leader -- its timeupdate periodically pulls the other player back in
-    // line if it has drifted, and its "ended" event restarts both together
-    // from frame 0. The follower's own "ended" is also handled as a safety
-    // net in case it (unexpectedly) finishes first.
-    function setupVideoSync(block) {
-        const leader = block.querySelector(".video-after");
-        const follower = block.querySelector(".video-before");
+        // Keep the two side-by-side players in lockstep. Both sources are
+        // trimmed to the same frame count (see resources/video), so native
+        // "loop" on each element would still drift apart over many cycles
+        // (two independent <video> elements don't loop in perfect
+        // lockstep). Instead: no native loop attribute; "Ours" is the sync
+        // leader -- its timeupdate periodically pulls the other player back
+        // in line if it has drifted, and its "ended" event restarts both
+        // together from frame 0. The follower's own "ended" is also handled
+        // as a safety net in case it (unexpectedly) finishes first.
         const SYNC_THRESHOLD_S = 0.15;
-
         function restartBoth() {
-            leader.currentTime = 0;
-            follower.currentTime = 0;
-            [leader, follower].forEach(function (v) {
+            refs.afterVideo.currentTime = 0;
+            refs.beforeVideo.currentTime = 0;
+            [refs.afterVideo, refs.beforeVideo].forEach(function (v) {
                 const p = v.play();
                 if (p !== undefined) p.catch(function () {});
             });
         }
-
-        leader.addEventListener("timeupdate", function () {
-            if (Math.abs(follower.currentTime - leader.currentTime) > SYNC_THRESHOLD_S) {
-                follower.currentTime = leader.currentTime;
+        refs.afterVideo.addEventListener("timeupdate", function () {
+            if (Math.abs(refs.beforeVideo.currentTime - refs.afterVideo.currentTime) > SYNC_THRESHOLD_S) {
+                refs.beforeVideo.currentTime = refs.afterVideo.currentTime;
             }
         });
-        leader.addEventListener("ended", restartBoth);
-        follower.addEventListener("ended", restartBoth);
+        refs.afterVideo.addEventListener("ended", restartBoth);
+        refs.beforeVideo.addEventListener("ended", restartBoth);
+
+        refs.range.addEventListener("input", refreshVideo);
+        radios.forEach(function (radio) {
+            radio.addEventListener("change", refreshVideo);
+        });
+
+        return { block: block, refs: refs, refreshVideo: refreshVideo };
     }
 
-    document.querySelectorAll(".video-qual-block").forEach(function (block) {
-        const range = block.querySelector(".video-range");
-        range.addEventListener("input", function () {
-            refreshVideo(block);
-        });
-        block.querySelectorAll(".compare-radio").forEach(function (radio) {
-            radio.addEventListener("change", function () {
-                refreshVideo(block);
-            });
-        });
-        setupVideoSync(block);
-    });
+    const videoBlocks = Array.from(document.querySelectorAll(".video-qual-block")).map(setupVideoBlock);
+    const videoBlockByEl = new WeakMap();
+    videoBlocks.forEach(function (vb) { videoBlockByEl.set(vb.block, vb); });
 
     // BUGFIX: calling refreshVideo() (load()+play() on 2 <video> elements)
     // for EVERY block right on page load doesn't scale -- fine at a
@@ -291,15 +314,17 @@ document.addEventListener("DOMContentLoaded", function () {
     // moment a block scrolls OUT of view, and resume them when it scrolls
     // back in. This keeps the number of actively-decoding videos bounded to
     // roughly what's on screen, no matter how far the page is scrolled.
-    if ("IntersectionObserver" in window) {
+    if (videoBlocks.length && "IntersectionObserver" in window) {
+        const initialized = new WeakSet();
         const videoObserver = new IntersectionObserver(function (entries) {
             entries.forEach(function (entry) {
-                const block = entry.target;
-                const players = [block.querySelector(".video-before"), block.querySelector(".video-after")];
+                const vb = videoBlockByEl.get(entry.target);
+                if (!vb) return;
+                const players = [vb.refs.beforeVideo, vb.refs.afterVideo];
                 if (entry.isIntersecting) {
-                    if (!block.dataset.videoInited) {
-                        block.dataset.videoInited = "1";
-                        refreshVideo(block);
+                    if (!initialized.has(vb.block)) {
+                        initialized.add(vb.block);
+                        vb.refreshVideo();
                     } else {
                         players.forEach(function (v) {
                             const p = v.play();
@@ -311,12 +336,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             });
         }, { rootMargin: "200px" });
-        document.querySelectorAll(".video-qual-block").forEach(function (block) {
-            videoObserver.observe(block);
-        });
+        videoBlocks.forEach(function (vb) { videoObserver.observe(vb.block); });
     } else {
         // No IntersectionObserver support: fall back to the old eager behavior.
-        document.querySelectorAll(".video-qual-block").forEach(refreshVideo);
+        videoBlocks.forEach(function (vb) { vb.refreshVideo(); });
     }
 
     // ---------------------------------------------------------------
