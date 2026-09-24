@@ -1,0 +1,1279 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>H-DDCM</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="style.css" rel="stylesheet" type="text/css">
+
+    <meta property="og:title" content="H-DDCM" />
+    <meta property="og:description" content="Image and video compression via reproducible, seed-derived codebook noise selection in diffusion models." />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/img-comparison-slider@8/dist/index.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/img-comparison-slider@8/dist/styles.css" />
+
+    <script defer src="functionality.js"></script>
+</head>
+<body>
+
+<!-- navigation bar -->
+<nav id="navbar_top" class="navbar sticky-top navbar-expand-lg navbar-dark bg-primary" style="margin-bottom: 15px;">
+    <div class="container">
+        <a class="navbar-brand d-none d-sm-block" href="#top-title">H-DDCM</a>
+        <a class="navbar-brand d-block d-sm-none" href="#top-title">H-DDCM</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main_nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="main_nav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="#image-compression">Image Compression</a></li>
+                <li class="nav-item"><a class="nav-link" href="#video-compression">Video Compression</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+<!-- end nav bar -->
+
+<div class="container">
+    <!-- top button -->
+    <button type="button" class="btn btn-danger btn-floating btn-lg" id="btn-back-to-top">
+        <i class="fas fa-arrow-up">&uarr;</i>
+    </button>
+    <!-- end top button -->
+
+    <!-- top - title (tiny build: no authors/affiliation) -->
+    <center>
+        <h1 class="poppins-medium" id="top-title">
+            H-DDCM: Hadamard Codebooks for Fast<br>
+            Generative Image and Video Compression
+        </h1>
+    </center>
+    <!-- end top -->
+
+    <h1 class="text-center poppins-regular" style="margin-top: 20px;">Abstract</h1>
+    <p class="roboto-400">
+        Training-free diffusion-based compression methods repurpose the generative priors of a diffusion or a
+        flow model to compress data without retraining them as task-specific codecs. Recent codebook-based
+        approaches such as Turbo-DDCM achieve strong perceptual quality at ultra-low bitrates, but their reliance
+        on dense Gaussian codebooks remains costly in both memory and computation, and scales poorly with the
+        large latent dimensions of modern image and video generators. Their combinatorial bitstream encoding
+        further becomes computationally heavy at this scale. We introduce H-DDCM, a scalable generative
+        compression framework that replaces Gaussian codebooks with implicit randomized Hadamard dictionaries.
+        The fast Walsh&ndash;Hadamard transform allows implicitly synthesizing full-dimensional dictionaries with
+        <i>O</i>(<i>D</i>&thinsp;log&thinsp;<i>D</i>) compute for projection and reconstruction and <i>O</i>(<i>D</i>)
+        working memory, without materializing the full-dimensional dictionary. We further introduce an efficient
+        table-free lexicographic coding scheme that makes combinatorial encoding practical at larger dimensions.
+        Beyond images, we adapt the framework to an autoregressive video flow model and develop a streaming
+        compression scheme that periodically re-encodes recently reconstructed frames into a fresh KV-cache
+        prefix, preserving temporal context across segments at no additional transmitted bits. This enables
+        long-form, close to real-time generative video compression on a single GPU. Across image and video
+        benchmarks, H-DDCM achieves competitive rate-distortion-perception performance while substantially
+        reducing the memory and computational overhead of codebook-based training-free generative compression.
+    </p>
+    <!-- end abstract -->
+
+    <div class="accordion roboto-400" id="tasks-accordion">
+
+        <!-- ================= Image Compression ================= -->
+        <div class="accordion-item anchor" id="image-compression">
+            <div class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#tasks-accordion-image-compression" aria-expanded="true" aria-controls="tasks-accordion-image-compression">
+                    <h1 class="text-center poppins-regular" style="margin-top: 10px; margin-left: auto;">Image Compression</h1>
+                </button>
+            </div>
+            <div id="tasks-accordion-image-compression" class="accordion-collapse collapse show" data-bs-parent="#tasks-accordion">
+                <div class="accordion-body">
+                    <p>
+                        We compare our reproducible codebook-based noise selection against Turbo-DDCM on two
+                        pretrained diffusion backbones, Stable Diffusion 2.1 (Kodak24) and FLUX (DIV2K), across a wide
+                        bits-per-pixel (BPP) range. These quantitative comparisons show that our method is the
+                        fastest, without additional memory requirements, and achieves on-par results to other
+                        state-of-the-art methods on the rate-distortion-perception tradeoff.
+                    </p>
+
+                    <!-- ---------- Quantitative comparison ---------- -->
+                    <h3 class="text-center poppins-regular" style="margin-top: 30px;">Quantitative Comparison</h3>
+                    <div class="row justify-content-center g-4" style="margin-top: 10px;">
+                        <div class="col-12 col-lg-10 text-center">
+                            <img src="resources/quant/sd21_grid_comparison_p64_main.png" class="quant-figure" alt="SD2.1 quantitative comparison">
+                            <p class="quant-caption"><b>Stable Diffusion 2.1 (Kodak24)</b></p>
+                        </div>
+                        <div class="col-12 col-lg-10 text-center">
+                            <img src="resources/quant/flux_grid_comparison_p64_main.png" class="quant-figure" alt="FLUX quantitative comparison">
+                            <p class="quant-caption"><b>FLUX (DIV2K)</b></p>
+                        </div>
+                    </div>
+
+                    <!-- ---------- Qualitative comparison: SD2.1 / Kodak24 ---------- -->
+                    <!-- 3 bit-budget points per image, matching the full site. -->
+                    <h3 class="text-center poppins-regular" style="margin-top: 40px;">Qualitative Comparison &mdash; Stable Diffusion 2.1 (Kodak24)</h3>
+                    <div class="row justify-content-center row-cols-1 row-cols-lg-3 g-4">
+
+                        <!-- kodak24 image 1.png -- M=62 (paper figure) -->
+                        <div class="col qual-block" data-dataset="kodak24" data-img="1" data-points="[{&quot;M&quot;:62,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;1_ddcm_M62.png&quot;,&quot;bpp&quot;:0.03049,&quot;roundtrip_s&quot;:60.56},&quot;diffc&quot;:{&quot;file&quot;:&quot;1_diffc_M62.png&quot;,&quot;bpp&quot;:0.0239,&quot;roundtrip_s&quot;:5.5},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;1_turboddcm_M62.png&quot;,&quot;bpp&quot;:0.02711,&quot;roundtrip_s&quot;:1.33},&quot;ours&quot;:{&quot;file&quot;:&quot;1_ours_M62.png&quot;,&quot;bpp&quot;:0.02711,&quot;roundtrip_s&quot;:1.31}}},{&quot;M&quot;:102,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;1_ddcm_M102.png&quot;,&quot;bpp&quot;:0.09527,&quot;roundtrip_s&quot;:69.14},&quot;diffc&quot;:{&quot;file&quot;:&quot;1_diffc_M102.png&quot;,&quot;bpp&quot;:0.07935,&quot;roundtrip_s&quot;:12.52},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;1_turboddcm_M102.png&quot;,&quot;bpp&quot;:0.08325,&quot;roundtrip_s&quot;:1.82},&quot;ours&quot;:{&quot;file&quot;:&quot;1_ours_M102.png&quot;,&quot;bpp&quot;:0.08325,&quot;roundtrip_s&quot;:1.74}}},{&quot;M&quot;:207,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;1_ddcm_M207.png&quot;,&quot;bpp&quot;:0.14862,&quot;roundtrip_s&quot;:77.19},&quot;diffc&quot;:{&quot;file&quot;:&quot;1_diffc_M207.png&quot;,&quot;bpp&quot;:0.12244,&quot;roundtrip_s&quot;:15.9},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;1_turboddcm_M207.png&quot;,&quot;bpp&quot;:0.19968,&quot;roundtrip_s&quot;:2.16},&quot;ours&quot;:{&quot;file&quot;:&quot;1_ours_M207.png&quot;,&quot;bpp&quot;:0.19968,&quot;roundtrip_s&quot;:2.04}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-1-compare" id="kodak24-1-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="kodak24-1-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-1-compare" id="kodak24-1-compare-ddcm" data-method="ddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-1-compare-ddcm">DDCM</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-1-compare" id="kodak24-1-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="kodak24-1-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-1-compare" id="kodak24-1-compare-turboddcm" data-method="turboddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-1-compare-turboddcm">Turbo-DDCM</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/kodak24/1_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/kodak24/1_ours_M62.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- kodak24 image 19.png -- M=92 (paper figure) -->
+                        <div class="col qual-block" data-dataset="kodak24" data-img="19" data-points="[{&quot;M&quot;:92,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;19_ddcm_M92.png&quot;,&quot;bpp&quot;:0.04954,&quot;roundtrip_s&quot;:64.67},&quot;diffc&quot;:{&quot;file&quot;:&quot;19_diffc_M92.png&quot;,&quot;bpp&quot;:0.06174,&quot;roundtrip_s&quot;:10.96},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;19_turboddcm_M92.png&quot;,&quot;bpp&quot;:0.06581,&quot;roundtrip_s&quot;:1.67},&quot;ours&quot;:{&quot;file&quot;:&quot;19_ours_M92.png&quot;,&quot;bpp&quot;:0.06581,&quot;roundtrip_s&quot;:1.64}}},{&quot;M&quot;:159,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;19_ddcm_M159.png&quot;,&quot;bpp&quot;:0.14862,&quot;roundtrip_s&quot;:76.61},&quot;diffc&quot;:{&quot;file&quot;:&quot;19_diffc_M159.png&quot;,&quot;bpp&quot;:0.11105,&quot;roundtrip_s&quot;:15.25},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;19_turboddcm_M159.png&quot;,&quot;bpp&quot;:0.15997,&quot;roundtrip_s&quot;:2.15},&quot;ours&quot;:{&quot;file&quot;:&quot;19_ours_M159.png&quot;,&quot;bpp&quot;:0.15997,&quot;roundtrip_s&quot;:2.02}}},{&quot;M&quot;:250,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;19_ddcm_M250.png&quot;,&quot;bpp&quot;:0.30868,&quot;roundtrip_s&quot;:95.5},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;19_turboddcm_M250.png&quot;,&quot;bpp&quot;:0.23364,&quot;roundtrip_s&quot;:2.18},&quot;ours&quot;:{&quot;file&quot;:&quot;19_ours_M250.png&quot;,&quot;bpp&quot;:0.23364,&quot;roundtrip_s&quot;:2.07}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-19-compare" id="kodak24-19-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="kodak24-19-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-19-compare" id="kodak24-19-compare-ddcm" data-method="ddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-19-compare-ddcm">DDCM</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-19-compare" id="kodak24-19-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="kodak24-19-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-19-compare" id="kodak24-19-compare-turboddcm" data-method="turboddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-19-compare-turboddcm">Turbo-DDCM</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/kodak24/19_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/kodak24/19_ours_M92.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- kodak24 image 23.png -- M=159 (paper figure) -->
+                        <div class="col qual-block" data-dataset="kodak24" data-img="23" data-points="[{&quot;M&quot;:159,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;23_ddcm_M159.png&quot;,&quot;bpp&quot;:0.14862,&quot;roundtrip_s&quot;:76.03},&quot;diffc&quot;:{&quot;file&quot;:&quot;23_diffc_M159.png&quot;,&quot;bpp&quot;:0.11395,&quot;roundtrip_s&quot;:15.52},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;23_turboddcm_M159.png&quot;,&quot;bpp&quot;:0.15997,&quot;roundtrip_s&quot;:2.16},&quot;ours&quot;:{&quot;file&quot;:&quot;23_ours_M159.png&quot;,&quot;bpp&quot;:0.15997,&quot;roundtrip_s&quot;:2.01}}},{&quot;M&quot;:207,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;23_ddcm_M207.png&quot;,&quot;bpp&quot;:0.14862,&quot;roundtrip_s&quot;:76.03},&quot;diffc&quot;:{&quot;file&quot;:&quot;23_diffc_M207.png&quot;,&quot;bpp&quot;:0.11395,&quot;roundtrip_s&quot;:15.52},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;23_turboddcm_M207.png&quot;,&quot;bpp&quot;:0.19968,&quot;roundtrip_s&quot;:2.16},&quot;ours&quot;:{&quot;file&quot;:&quot;23_ours_M207.png&quot;,&quot;bpp&quot;:0.19968,&quot;roundtrip_s&quot;:2.06}}},{&quot;M&quot;:300,&quot;methods&quot;:{&quot;ddcm&quot;:{&quot;file&quot;:&quot;23_ddcm_M300.png&quot;,&quot;bpp&quot;:0.30868,&quot;roundtrip_s&quot;:97.1},&quot;turboddcm&quot;:{&quot;file&quot;:&quot;23_turboddcm_M300.png&quot;,&quot;bpp&quot;:0.27159,&quot;roundtrip_s&quot;:2.25},&quot;ours&quot;:{&quot;file&quot;:&quot;23_ours_M300.png&quot;,&quot;bpp&quot;:0.27159,&quot;roundtrip_s&quot;:2.07}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-23-compare" id="kodak24-23-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="kodak24-23-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-23-compare" id="kodak24-23-compare-ddcm" data-method="ddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-23-compare-ddcm">DDCM</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-23-compare" id="kodak24-23-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="kodak24-23-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="kodak24-23-compare" id="kodak24-23-compare-turboddcm" data-method="turboddcm">
+                                        <label class="btn btn-outline-secondary" for="kodak24-23-compare-turboddcm">Turbo-DDCM</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/kodak24/23_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/kodak24/23_ours_M159.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- ---------- Qualitative comparison: FLUX / DIV2K ---------- -->
+                    <!-- 3 bit-budget points per image, matching the full site. -->
+                    <h3 class="text-center poppins-regular" style="margin-top: 40px;">Qualitative Comparison &mdash; FLUX (DIV2K)</h3>
+                    <div class="row justify-content-center row-cols-1 row-cols-lg-3 g-4">
+
+                        <!-- flux image 0897.png -- true_M=67 (paper figure) -->
+                        <div class="col qual-block" data-dataset="flux" data-img="0897" data-points="[{&quot;M&quot;:67,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0897_ours_M67.png&quot;,&quot;bpp&quot;:0.01372,&quot;roundtrip_s&quot;:41.8},&quot;diffc&quot;:{&quot;file&quot;:&quot;0897_diffc_M67.png&quot;,&quot;bpp&quot;:0.01543,&quot;roundtrip_s&quot;:66.98},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0897_turboddcm_k16384_M67.png&quot;,&quot;bpp&quot;:0.01442,&quot;roundtrip_s&quot;:47.81},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0897_turboddcm_kd_M67.png&quot;,&quot;bpp&quot;:0.0128,&quot;roundtrip_s&quot;:59.94}}},{&quot;M&quot;:219,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0897_ours_M219.png&quot;,&quot;bpp&quot;:0.05017,&quot;roundtrip_s&quot;:46.36},&quot;diffc&quot;:{&quot;file&quot;:&quot;0897_diffc_M219.png&quot;,&quot;bpp&quot;:0.05798,&quot;roundtrip_s&quot;:103.46},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0897_turboddcm_k16384_M219.png&quot;,&quot;bpp&quot;:0.05318,&quot;roundtrip_s&quot;:48.89},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0897_turboddcm_kd_M219.png&quot;,&quot;bpp&quot;:0.05017,&quot;roundtrip_s&quot;:71.92}}},{&quot;M&quot;:638,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0897_ours_M638.png&quot;,&quot;bpp&quot;:0.13525,&quot;roundtrip_s&quot;:48.91},&quot;diffc&quot;:{&quot;file&quot;:&quot;0897_diffc_M638.png&quot;,&quot;bpp&quot;:0.10683,&quot;roundtrip_s&quot;:131.94},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0897_turboddcm_k16384_M638.png&quot;,&quot;bpp&quot;:0.12204,&quot;roundtrip_s&quot;:49.15},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0897_turboddcm_kd_M638.png&quot;,&quot;bpp&quot;:0.12849,&quot;roundtrip_s&quot;:74.18}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0897-compare" id="flux-0897-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="flux-0897-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0897-compare" id="flux-0897-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="flux-0897-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0897-compare" id="flux-0897-compare-turboddcm_k16384" data-method="turboddcm_k16384">
+                                        <label class="btn btn-outline-secondary" for="flux-0897-compare-turboddcm_k16384">Turbo-DDCM (K=2<sup>14</sup>)</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0897-compare" id="flux-0897-compare-turboddcm_kd" data-method="turboddcm_kd">
+                                        <label class="btn btn-outline-secondary" for="flux-0897-compare-turboddcm_kd">Turbo-DDCM (K=d)</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/flux/0897_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/flux/0897_ours_M67.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- flux image 0881.png -- true_M=84 (paper figure) -->
+                        <div class="col qual-block" data-dataset="flux" data-img="0881" data-points="[{&quot;M&quot;:84,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0881_ours_M84.png&quot;,&quot;bpp&quot;:0.01907,&quot;roundtrip_s&quot;:43.82},&quot;diffc&quot;:{&quot;file&quot;:&quot;0881_diffc_M84.png&quot;,&quot;bpp&quot;:0.02552,&quot;roundtrip_s&quot;:78.59},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0881_turboddcm_k16384_M84.png&quot;,&quot;bpp&quot;:0.02182,&quot;roundtrip_s&quot;:48.9},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0881_turboddcm_kd_M84.png&quot;,&quot;bpp&quot;:0.02019,&quot;roundtrip_s&quot;:68.9}}},{&quot;M&quot;:219,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0881_ours_M219.png&quot;,&quot;bpp&quot;:0.05017,&quot;roundtrip_s&quot;:46.33},&quot;diffc&quot;:{&quot;file&quot;:&quot;0881_diffc_M219.png&quot;,&quot;bpp&quot;:0.04979,&quot;roundtrip_s&quot;:101.6},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0881_turboddcm_k16384_M219.png&quot;,&quot;bpp&quot;:0.05318,&quot;roundtrip_s&quot;:48.89},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0881_turboddcm_kd_M219.png&quot;,&quot;bpp&quot;:0.05017,&quot;roundtrip_s&quot;:71.92}}},{&quot;M&quot;:638,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0881_ours_M638.png&quot;,&quot;bpp&quot;:0.13525,&quot;roundtrip_s&quot;:48.93},&quot;diffc&quot;:{&quot;file&quot;:&quot;0881_diffc_M638.png&quot;,&quot;bpp&quot;:0.08949,&quot;roundtrip_s&quot;:128.16},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0881_turboddcm_k16384_M638.png&quot;,&quot;bpp&quot;:0.12204,&quot;roundtrip_s&quot;:49.15},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0881_turboddcm_kd_M638.png&quot;,&quot;bpp&quot;:0.12849,&quot;roundtrip_s&quot;:74.18}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0881-compare" id="flux-0881-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="flux-0881-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0881-compare" id="flux-0881-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="flux-0881-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0881-compare" id="flux-0881-compare-turboddcm_k16384" data-method="turboddcm_k16384">
+                                        <label class="btn btn-outline-secondary" for="flux-0881-compare-turboddcm_k16384">Turbo-DDCM (K=2<sup>14</sup>)</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0881-compare" id="flux-0881-compare-turboddcm_kd" data-method="turboddcm_kd">
+                                        <label class="btn btn-outline-secondary" for="flux-0881-compare-turboddcm_kd">Turbo-DDCM (K=d)</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/flux/0881_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/flux/0881_ours_M84.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- flux image 0845.png -- true_M=128 (paper figure) -->
+                        <div class="col qual-block" data-dataset="flux" data-img="0845" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0845_ours_M128.png&quot;,&quot;bpp&quot;:0.02946,&quot;roundtrip_s&quot;:45.08},&quot;diffc&quot;:{&quot;file&quot;:&quot;0845_diffc_M128.png&quot;,&quot;bpp&quot;:0.03971,&quot;roundtrip_s&quot;:99.2},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0845_turboddcm_k16384_M128.png&quot;,&quot;bpp&quot;:0.03426,&quot;roundtrip_s&quot;:48.75},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0845_turboddcm_kd_M128.png&quot;,&quot;bpp&quot;:0.03109,&quot;roundtrip_s&quot;:71.42}}},{&quot;M&quot;:373,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0845_ours_M373.png&quot;,&quot;bpp&quot;:0.08455,&quot;roundtrip_s&quot;:47.97},&quot;diffc&quot;:{&quot;file&quot;:&quot;0845_diffc_M373.png&quot;,&quot;bpp&quot;:0.06871,&quot;roundtrip_s&quot;:123.32},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0845_turboddcm_k16384_M373.png&quot;,&quot;bpp&quot;:0.08194,&quot;roundtrip_s&quot;:49.09},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0845_turboddcm_kd_M373.png&quot;,&quot;bpp&quot;:0.08033,&quot;roundtrip_s&quot;:72.81}}},{&quot;M&quot;:1063,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;0845_ours_M1063.png&quot;,&quot;bpp&quot;:0.21046,&quot;roundtrip_s&quot;:50.45},&quot;diffc&quot;:{&quot;file&quot;:&quot;0845_diffc_M1063.png&quot;,&quot;bpp&quot;:0.12216,&quot;roundtrip_s&quot;:162.89},&quot;turboddcm_k16384&quot;:{&quot;file&quot;:&quot;0845_turboddcm_k16384_M1063.png&quot;,&quot;bpp&quot;:0.18845,&quot;roundtrip_s&quot;:53.05},&quot;turboddcm_kd&quot;:{&quot;file&quot;:&quot;0845_turboddcm_kd_M1063.png&quot;,&quot;bpp&quot;:0.19993,&quot;roundtrip_s&quot;:76.21}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0845-compare" id="flux-0845-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="flux-0845-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0845-compare" id="flux-0845-compare-diffc" data-method="diffc">
+                                        <label class="btn btn-outline-secondary" for="flux-0845-compare-diffc">DiffC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0845-compare" id="flux-0845-compare-turboddcm_k16384" data-method="turboddcm_k16384">
+                                        <label class="btn btn-outline-secondary" for="flux-0845-compare-turboddcm_k16384">Turbo-DDCM (K=2<sup>14</sup>)</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="flux-0845-compare" id="flux-0845-compare-turboddcm_kd" data-method="turboddcm_kd">
+                                        <label class="btn btn-outline-secondary" for="flux-0845-compare-turboddcm_kd">Turbo-DDCM (K=d)</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <img-comparison-slider>
+                                        <figure slot="first" class="before">
+                                            <img class="qual-before-img" src="resources/flux/0845_gt.png" width="100%">
+                                            <div class="overlay-box-left qual-before-label">Original</div>
+                                            <figcaption class="qual-before-bpp" style="display:none;"></figcaption>
+                                        </figure>
+                                        <figure slot="second" class="after">
+                                            <img class="qual-after-img" src="resources/flux/0845_ours_M128.png" width="100%">
+                                            <figcaption class="qual-after-bpp"></figcaption>
+                                            <div class="overlay-box-right">Ours</div>
+                                        </figure>
+                                    </img-comparison-slider>
+                                    <input type="range" class="form-range custom-range qual-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Video Compression ================= -->
+        <div class="accordion-item anchor" id="video-compression">
+            <div class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#tasks-accordion-video-compression" aria-expanded="false" aria-controls="tasks-accordion-video-compression">
+                    <h1 class="text-center poppins-regular" style="margin-top: 10px; margin-left: auto;">Video Compression</h1>
+                </button>
+            </div>
+            <div id="tasks-accordion-video-compression" class="accordion-collapse collapse" data-bs-parent="#tasks-accordion">
+                <div class="accordion-body">
+                    <p>
+                        We extend our reproducible codebook-based noise selection to video generation, using a
+                        Causal-Forcing (CF) autoregressive (AR) causal video model as the backbone, evaluated on the
+                        MCL-JCV and UVG datasets. We achieve the fastest encoding and decoding compression compared
+                        to methods leveraging the same CF backbone, leading towards real-time video compression and
+                        streaming, while achieving on-par performance on the rate-distortion-perception tradeoff.
+                    </p>
+
+                    <!-- ---------- Quantitative comparison ---------- -->
+                    <h3 class="text-center poppins-regular" style="margin-top: 30px;">Quantitative Comparison</h3>
+                    <div class="row justify-content-center g-4" style="margin-top: 10px;">
+                        <div class="col-12 col-lg-10 text-center">
+                            <img src="resources/quant/video_grid_comparison_main.png" class="quant-figure" alt="Video quantitative comparison">
+                            <p class="quant-caption"><b>Causal-Forcing (MCL-JCV / UVG)</b></p>
+                        </div>
+                    </div>
+
+                    <!-- ---------- Qualitative comparison: Video ---------- -->
+                    <!-- All 17 videos from video_compression/selected_video_bpp_comparison
+                         (20260915 + 20260923_additional; the duplicate BasketballDrill
+                         entry from 20260915 is dropped in favor of the newer
+                         20260923_additional one), 2 per row, each with its own full
+                         (2- or 3-point) bit-budget slider from its own batch. -->
+                    <h3 class="text-center poppins-regular" style="margin-top: 40px;">Qualitative Comparison &mdash; Video</h3>
+                    <div class="row justify-content-center row-cols-1 row-cols-lg-2 g-4">
+
+                        <!-- YachtRide (20260915) -->
+                        <div class="col video-qual-block" data-video="YachtRide" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;YachtRide_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002235},&quot;hevc&quot;:{&quot;file&quot;:&quot;YachtRide_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.004486},&quot;vvc&quot;:{&quot;file&quot;:&quot;YachtRide_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.00189},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;YachtRide_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.001868},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;YachtRide_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.00474}}},{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;YachtRide_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005761},&quot;hevc&quot;:{&quot;file&quot;:&quot;YachtRide_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005749},&quot;vvc&quot;:{&quot;file&quot;:&quot;YachtRide_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005512},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;YachtRide_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005425},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;YachtRide_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.005744}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;YachtRide_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014681},&quot;hevc&quot;:{&quot;file&quot;:&quot;YachtRide_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014715},&quot;vvc&quot;:{&quot;file&quot;:&quot;YachtRide_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014636},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;YachtRide_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.014711},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;YachtRide_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.015647}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-YachtRide-compare" id="video-YachtRide-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-YachtRide-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-YachtRide-compare" id="video-YachtRide-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-YachtRide-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-YachtRide-compare" id="video-YachtRide-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-YachtRide-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-YachtRide-compare" id="video-YachtRide-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-YachtRide-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-YachtRide-compare" id="video-YachtRide-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-YachtRide-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC11 (20260915) -->
+                        <div class="col video-qual-block" data-video="videoSRC11" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC11_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002129},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC11_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.004576},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC11_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.001972},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC11_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.00195},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC11_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.004112}}},{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC11_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005567},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC11_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005554},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC11_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005525},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC11_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005369},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC11_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.006894}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC11_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010117},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC11_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010243},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC11_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010312},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC11_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.010625},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC11_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.012645}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC11-compare" id="video-videoSRC11-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC11-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC11-compare" id="video-videoSRC11-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC11-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC11-compare" id="video-videoSRC11-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC11-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC11-compare" id="video-videoSRC11-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC11-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC11-compare" id="video-videoSRC11-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC11-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC12 (20260915) -->
+                        <div class="col video-qual-block" data-video="videoSRC12" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC12_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002129},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC12_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.00207},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC12_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.001968},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC12_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.00201},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC12_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.00422}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC12_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010117},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC12_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010314},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC12_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.01031},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC12_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.01027},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC12_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.012752}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC12_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014336},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC12_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014645},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC12_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014754},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC12_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.014731},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC12_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.01519}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC12-compare" id="video-videoSRC12-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC12-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC12-compare" id="video-videoSRC12-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC12-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC12-compare" id="video-videoSRC12-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC12-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC12-compare" id="video-videoSRC12-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC12-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC12-compare" id="video-videoSRC12-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC12-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC01 (20260915) -->
+                        <div class="col video-qual-block" data-video="videoSRC01" data-points="[{&quot;M&quot;:256,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC01_ours_M256.mp4&quot;,&quot;bpp&quot;:0.003279},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC01_hevc_M256.mp4&quot;,&quot;bpp&quot;:0.00318},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC01_vvc_M256.mp4&quot;,&quot;bpp&quot;:0.003167},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC01_dcvcuf_M256.mp4&quot;,&quot;bpp&quot;:0.003228},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC01_zerogvc_M256.mp4&quot;,&quot;bpp&quot;:0.00344}}},{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC01_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005567},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC01_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005509},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC01_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005528},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC01_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.00545},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC01_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.006221}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC01_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014335},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC01_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014634},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC01_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.01457},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC01_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.011529},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC01_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.01441}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC01-compare" id="video-videoSRC01-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC01-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC01-compare" id="video-videoSRC01-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC01-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC01-compare" id="video-videoSRC01-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC01-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC01-compare" id="video-videoSRC01-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC01-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC01-compare" id="video-videoSRC01-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC01-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC28 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC28" data-points="[{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC28_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005567},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC28_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005505},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC28_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005519},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC28_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005491},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC28_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.005986}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC28_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010117},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC28_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010307},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC28_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010324},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC28_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.010296},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC28_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.011737}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC28-compare" id="video-videoSRC28-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC28-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC28-compare" id="video-videoSRC28-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC28-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC28-compare" id="video-videoSRC28-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC28-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC28-compare" id="video-videoSRC28-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC28-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC28-compare" id="video-videoSRC28-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC28-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="1" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC18 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC18" data-points="[{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC18_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010211},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC18_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.009572},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC18_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009552},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC18_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.009295},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC18_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010521}}},{&quot;M&quot;:1280,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC18_ours_M1280.mp4&quot;,&quot;bpp&quot;:0.01236},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC18_hevc_M1280.mp4&quot;,&quot;bpp&quot;:0.011649},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC18_vvc_M1280.mp4&quot;,&quot;bpp&quot;:0.011573},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC18_dcvcuf_M1280.mp4&quot;,&quot;bpp&quot;:0.011371},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC18_zerogvc_M1280.mp4&quot;,&quot;bpp&quot;:0.013208}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC18_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014454},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC18_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.013554},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC18_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.013511},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC18_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.013891},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC18_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.015643}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC18-compare" id="video-videoSRC18-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC18-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC18-compare" id="video-videoSRC18-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC18-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC18-compare" id="video-videoSRC18-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC18-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC18-compare" id="video-videoSRC18-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC18-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC18-compare" id="video-videoSRC18-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC18-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC03 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC03" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC03_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002129},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC03_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.002045},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC03_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.00198},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC03_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.001997},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC03_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.004137}}},{&quot;M&quot;:256,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC03_ours_M256.mp4&quot;,&quot;bpp&quot;:0.003278},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC03_hevc_M256.mp4&quot;,&quot;bpp&quot;:0.003293},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC03_vvc_M256.mp4&quot;,&quot;bpp&quot;:0.003167},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC03_dcvcuf_M256.mp4&quot;,&quot;bpp&quot;:0.00318},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC03_zerogvc_M256.mp4&quot;,&quot;bpp&quot;:0.004137}}},{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC03_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005566},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC03_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005498},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC03_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005528},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC03_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.00547},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC03_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.006919}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC03-compare" id="video-videoSRC03-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC03-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC03-compare" id="video-videoSRC03-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC03-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC03-compare" id="video-videoSRC03-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC03-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC03-compare" id="video-videoSRC03-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC03-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC03-compare" id="video-videoSRC03-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC03-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC19 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC19" data-points="[{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC19_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005567},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC19_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005702},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC19_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005527},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC19_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005353},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC19_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.007079}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC19_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010117},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC19_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010354},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC19_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010335},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC19_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.010233},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC19_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010139}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC19_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014335},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC19_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014632},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC19_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014618},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC19_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.014555},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC19_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.015268}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC19-compare" id="video-videoSRC19-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC19-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC19-compare" id="video-videoSRC19-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC19-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC19-compare" id="video-videoSRC19-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC19-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC19-compare" id="video-videoSRC19-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC19-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC19-compare" id="video-videoSRC19-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC19-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC24 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC24" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC24_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002301},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC24_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.00348},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC24_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.002149},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC24_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.002193},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC24_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.003289}}},{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC24_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005634},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC24_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005848},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC24_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005846},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC24_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005696},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC24_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.006065}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC24_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010211},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC24_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.009893},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC24_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009932},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC24_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.010171},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC24_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.011806}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC24-compare" id="video-videoSRC24-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC24-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC24-compare" id="video-videoSRC24-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC24-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC24-compare" id="video-videoSRC24-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC24-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC24-compare" id="video-videoSRC24-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC24-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC24-compare" id="video-videoSRC24-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC24-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC29 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC29" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC29_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002301},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC29_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.00225},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC29_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.002149},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC29_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.002175},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC29_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.003662}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC29_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010211},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC29_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010031},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC29_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009973},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC29_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.007303},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC29_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.01218}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC29_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014454},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC29_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014051},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC29_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014048},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC29_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.007303},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC29_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014614}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC29-compare" id="video-videoSRC29-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC29-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC29-compare" id="video-videoSRC29-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC29-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC29-compare" id="video-videoSRC29-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC29-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC29-compare" id="video-videoSRC29-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC29-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC29-compare" id="video-videoSRC29-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC29-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC05 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC05" data-points="[{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC05_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010212},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC05_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.009502},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC05_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009571},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC05_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.009308},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC05_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.012646}}},{&quot;M&quot;:2048,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC05_ours_M2048.mp4&quot;,&quot;bpp&quot;:0.018479},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC05_hevc_M2048.mp4&quot;,&quot;bpp&quot;:0.017349},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC05_vvc_M2048.mp4&quot;,&quot;bpp&quot;:0.017294},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC05_dcvcuf_M2048.mp4&quot;,&quot;bpp&quot;:0.017002},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC05_zerogvc_M2048.mp4&quot;,&quot;bpp&quot;:0.01508}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC05-compare" id="video-videoSRC05-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC05-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC05-compare" id="video-videoSRC05-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC05-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC05-compare" id="video-videoSRC05-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC05-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC05-compare" id="video-videoSRC05-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC05-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC05-compare" id="video-videoSRC05-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC05-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="1" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC20 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC20" data-points="[{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC20_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005635},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC20_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.0074},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC20_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.00562},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC20_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005554},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC20_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.006919}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC20_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010212},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC20_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.009634},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC20_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.00954},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC20_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.009527},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC20_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.012662}}},{&quot;M&quot;:2048,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC20_ours_M2048.mp4&quot;,&quot;bpp&quot;:0.018479},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC20_hevc_M2048.mp4&quot;,&quot;bpp&quot;:0.017337},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC20_vvc_M2048.mp4&quot;,&quot;bpp&quot;:0.01729},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC20_dcvcuf_M2048.mp4&quot;,&quot;bpp&quot;:0.017219},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC20_zerogvc_M2048.mp4&quot;,&quot;bpp&quot;:0.015096}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC20-compare" id="video-videoSRC20-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC20-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC20-compare" id="video-videoSRC20-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC20-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC20-compare" id="video-videoSRC20-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC20-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC20-compare" id="video-videoSRC20-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC20-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC20-compare" id="video-videoSRC20-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC20-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC22 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC22" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC22_ours_M128.mp4&quot;,&quot;bpp&quot;:0.0023},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC22_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.004492},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC22_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.002144},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC22_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.002226},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC22_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.004871}}},{&quot;M&quot;:1280,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC22_ours_M1280.mp4&quot;,&quot;bpp&quot;:0.012361},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC22_hevc_M1280.mp4&quot;,&quot;bpp&quot;:0.012015},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC22_vvc_M1280.mp4&quot;,&quot;bpp&quot;:0.012067},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC22_dcvcuf_M1280.mp4&quot;,&quot;bpp&quot;:0.01239},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC22_zerogvc_M1280.mp4&quot;,&quot;bpp&quot;:0.013389}}},{&quot;M&quot;:2048,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC22_ours_M2048.mp4&quot;,&quot;bpp&quot;:0.018478},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC22_hevc_M2048.mp4&quot;,&quot;bpp&quot;:0.018046},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC22_vvc_M2048.mp4&quot;,&quot;bpp&quot;:0.018034},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC22_dcvcuf_M2048.mp4&quot;,&quot;bpp&quot;:0.018191},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC22_zerogvc_M2048.mp4&quot;,&quot;bpp&quot;:0.015823}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC22-compare" id="video-videoSRC22-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC22-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC22-compare" id="video-videoSRC22-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC22-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC22-compare" id="video-videoSRC22-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC22-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC22-compare" id="video-videoSRC22-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC22-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC22-compare" id="video-videoSRC22-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC22-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- videoSRC21 (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="videoSRC21" data-points="[{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC21_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.010212},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC21_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.010031},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC21_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009943},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC21_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.009708},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC21_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.012123}}},{&quot;M&quot;:1280,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC21_ours_M1280.mp4&quot;,&quot;bpp&quot;:0.012361},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC21_hevc_M1280.mp4&quot;,&quot;bpp&quot;:0.012102},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC21_vvc_M1280.mp4&quot;,&quot;bpp&quot;:0.01205},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC21_dcvcuf_M1280.mp4&quot;,&quot;bpp&quot;:0.012391},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC21_zerogvc_M1280.mp4&quot;,&quot;bpp&quot;:0.014556}}},{&quot;M&quot;:2048,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;videoSRC21_ours_M2048.mp4&quot;,&quot;bpp&quot;:0.018479},&quot;hevc&quot;:{&quot;file&quot;:&quot;videoSRC21_hevc_M2048.mp4&quot;,&quot;bpp&quot;:0.017998},&quot;vvc&quot;:{&quot;file&quot;:&quot;videoSRC21_vvc_M2048.mp4&quot;,&quot;bpp&quot;:0.01804},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;videoSRC21_dcvcuf_M2048.mp4&quot;,&quot;bpp&quot;:0.017658},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;videoSRC21_zerogvc_M2048.mp4&quot;,&quot;bpp&quot;:0.014556}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC21-compare" id="video-videoSRC21-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC21-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC21-compare" id="video-videoSRC21-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC21-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC21-compare" id="video-videoSRC21-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC21-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC21-compare" id="video-videoSRC21-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC21-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-videoSRC21-compare" id="video-videoSRC21-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-videoSRC21-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Beauty (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="Beauty" data-points="[{&quot;M&quot;:64,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;Beauty_ours_M64.mp4&quot;,&quot;bpp&quot;:0.001599},&quot;hevc&quot;:{&quot;file&quot;:&quot;Beauty_hevc_M64.mp4&quot;,&quot;bpp&quot;:0.003556},&quot;vvc&quot;:{&quot;file&quot;:&quot;Beauty_vvc_M64.mp4&quot;,&quot;bpp&quot;:0.001893},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;Beauty_dcvcuf_M64.mp4&quot;,&quot;bpp&quot;:0.001885},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;Beauty_zerogvc_M64.mp4&quot;,&quot;bpp&quot;:0.003614}}},{&quot;M&quot;:256,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;Beauty_ours_M256.mp4&quot;,&quot;bpp&quot;:0.003418},&quot;hevc&quot;:{&quot;file&quot;:&quot;Beauty_hevc_M256.mp4&quot;,&quot;bpp&quot;:0.003556},&quot;vvc&quot;:{&quot;file&quot;:&quot;Beauty_vvc_M256.mp4&quot;,&quot;bpp&quot;:0.003123},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;Beauty_dcvcuf_M256.mp4&quot;,&quot;bpp&quot;:0.003084},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;Beauty_zerogvc_M256.mp4&quot;,&quot;bpp&quot;:0.003614}}},{&quot;M&quot;:1280,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;Beauty_ours_M1280.mp4&quot;,&quot;bpp&quot;:0.012564},&quot;hevc&quot;:{&quot;file&quot;:&quot;Beauty_hevc_M1280.mp4&quot;,&quot;bpp&quot;:0.012574},&quot;vvc&quot;:{&quot;file&quot;:&quot;Beauty_vvc_M1280.mp4&quot;,&quot;bpp&quot;:0.012516},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;Beauty_dcvcuf_M1280.mp4&quot;,&quot;bpp&quot;:0.012511},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;Beauty_zerogvc_M1280.mp4&quot;,&quot;bpp&quot;:0.014521}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-Beauty-compare" id="video-Beauty-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-Beauty-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-Beauty-compare" id="video-Beauty-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-Beauty-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-Beauty-compare" id="video-Beauty-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-Beauty-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-Beauty-compare" id="video-Beauty-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-Beauty-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-Beauty-compare" id="video-Beauty-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-Beauty-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- HoneyBee (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="HoneyBee" data-points="[{&quot;M&quot;:128,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;HoneyBee_ours_M128.mp4&quot;,&quot;bpp&quot;:0.002235},&quot;hevc&quot;:{&quot;file&quot;:&quot;HoneyBee_hevc_M128.mp4&quot;,&quot;bpp&quot;:0.001997},&quot;vvc&quot;:{&quot;file&quot;:&quot;HoneyBee_vvc_M128.mp4&quot;,&quot;bpp&quot;:0.001896},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;HoneyBee_dcvcuf_M128.mp4&quot;,&quot;bpp&quot;:0.001897},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;HoneyBee_zerogvc_M128.mp4&quot;,&quot;bpp&quot;:0.005952}}},{&quot;M&quot;:256,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;HoneyBee_ours_M256.mp4&quot;,&quot;bpp&quot;:0.003418},&quot;hevc&quot;:{&quot;file&quot;:&quot;HoneyBee_hevc_M256.mp4&quot;,&quot;bpp&quot;:0.00323},&quot;vvc&quot;:{&quot;file&quot;:&quot;HoneyBee_vvc_M256.mp4&quot;,&quot;bpp&quot;:0.003109},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;HoneyBee_dcvcuf_M256.mp4&quot;,&quot;bpp&quot;:0.003171},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;HoneyBee_zerogvc_M256.mp4&quot;,&quot;bpp&quot;:0.005952}}},{&quot;M&quot;:1280,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;HoneyBee_ours_M1280.mp4&quot;,&quot;bpp&quot;:0.012563},&quot;hevc&quot;:{&quot;file&quot;:&quot;HoneyBee_hevc_M1280.mp4&quot;,&quot;bpp&quot;:0.012618},&quot;vvc&quot;:{&quot;file&quot;:&quot;HoneyBee_vvc_M1280.mp4&quot;,&quot;bpp&quot;:0.012515},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;HoneyBee_dcvcuf_M1280.mp4&quot;,&quot;bpp&quot;:0.012582},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;HoneyBee_zerogvc_M1280.mp4&quot;,&quot;bpp&quot;:0.014434}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-HoneyBee-compare" id="video-HoneyBee-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-HoneyBee-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-HoneyBee-compare" id="video-HoneyBee-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-HoneyBee-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-HoneyBee-compare" id="video-HoneyBee-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-HoneyBee-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-HoneyBee-compare" id="video-HoneyBee-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-HoneyBee-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-HoneyBee-compare" id="video-HoneyBee-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-HoneyBee-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- BasketballDrill (20260923_additional) -->
+                        <div class="col video-qual-block" data-video="BasketballDrill" data-points="[{&quot;M&quot;:512,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;BasketballDrill_ours_M512.mp4&quot;,&quot;bpp&quot;:0.005415},&quot;hevc&quot;:{&quot;file&quot;:&quot;BasketballDrill_hevc_M512.mp4&quot;,&quot;bpp&quot;:0.005346},&quot;vvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_vvc_M512.mp4&quot;,&quot;bpp&quot;:0.005358},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;BasketballDrill_dcvcuf_M512.mp4&quot;,&quot;bpp&quot;:0.005239},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_zerogvc_M512.mp4&quot;,&quot;bpp&quot;:0.007004}}},{&quot;M&quot;:1024,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;BasketballDrill_ours_M1024.mp4&quot;,&quot;bpp&quot;:0.009904},&quot;hevc&quot;:{&quot;file&quot;:&quot;BasketballDrill_hevc_M1024.mp4&quot;,&quot;bpp&quot;:0.009985},&quot;vvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_vvc_M1024.mp4&quot;,&quot;bpp&quot;:0.009923},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;BasketballDrill_dcvcuf_M1024.mp4&quot;,&quot;bpp&quot;:0.009754},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_zerogvc_M1024.mp4&quot;,&quot;bpp&quot;:0.010078}}},{&quot;M&quot;:1536,&quot;methods&quot;:{&quot;ours&quot;:{&quot;file&quot;:&quot;BasketballDrill_ours_M1536.mp4&quot;,&quot;bpp&quot;:0.014066},&quot;hevc&quot;:{&quot;file&quot;:&quot;BasketballDrill_hevc_M1536.mp4&quot;,&quot;bpp&quot;:0.014136},&quot;vvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_vvc_M1536.mp4&quot;,&quot;bpp&quot;:0.014091},&quot;dcvcuf&quot;:{&quot;file&quot;:&quot;BasketballDrill_dcvcuf_M1536.mp4&quot;,&quot;bpp&quot;:0.014145},&quot;zerogvc&quot;:{&quot;file&quot;:&quot;BasketballDrill_zerogvc_M1536.mp4&quot;,&quot;bpp&quot;:0.015231}}}]">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <div class="btn-group-vertical" role="group">
+                                        <input type="radio" class="btn-check" checked disabled>
+                                        <label class="btn btn-secondary">Compare to</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-BasketballDrill-compare" id="video-BasketballDrill-compare-original" data-method="original" checked>
+                                        <label class="btn btn-outline-secondary" for="video-BasketballDrill-compare-original">Original</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-BasketballDrill-compare" id="video-BasketballDrill-compare-hevc" data-method="hevc">
+                                        <label class="btn btn-outline-secondary" for="video-BasketballDrill-compare-hevc">HEVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-BasketballDrill-compare" id="video-BasketballDrill-compare-vvc" data-method="vvc">
+                                        <label class="btn btn-outline-secondary" for="video-BasketballDrill-compare-vvc">VVC</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-BasketballDrill-compare" id="video-BasketballDrill-compare-dcvcuf" data-method="dcvcuf">
+                                        <label class="btn btn-outline-secondary" for="video-BasketballDrill-compare-dcvcuf">DCVC-UF</label>
+
+                                        <input type="radio" class="btn-check compare-radio" name="video-BasketballDrill-compare" id="video-BasketballDrill-compare-zerogvc" data-method="zerogvc">
+                                        <label class="btn btn-outline-secondary" for="video-BasketballDrill-compare-zerogvc">Zero-GVC</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-before" muted autoplay playsinline></video>
+                                                <div class="overlay-box-left video-before-label">Original</div>
+                                                <div class="video-caption video-caption-left video-before-bpp" style="display:none;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="video-frame">
+                                                <video class="video-after" muted autoplay playsinline></video>
+                                                <div class="overlay-box-right">Ours</div>
+                                                <div class="video-caption video-caption-right video-after-bpp"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="range" class="form-range custom-range video-range" min="0" max="2" step="1" value="0">
+                                    <div class="d-flex justify-content-between" style="font-size: 12px; color: #777;">
+                                        <span>&larr; smaller bit budget</span><span>larger bit budget &rarr;</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <br>
+</div>
+
+</body>
+</html>

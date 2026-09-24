@@ -1,0 +1,305 @@
+/* style.css -- adapted from the DDCM (ddcm-2025.github.io) project page template */
+@charset "UTF-8";
+
+body {
+    font-family: "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 300;
+    font-size: 16px;
+    margin: 0;
+    padding: 0;
+}
+
+p {
+    font-size: 12.5pt;
+}
+
+/* Hero title -- a bit smaller than the default h1 size. */
+#top-title {
+    font-size: 2.5rem;
+}
+
+/* Accordion headers (Image/Video Compression) and top-level section
+   headers (Abstract, BibTeX) -- share the .poppins-regular h1 class. */
+h1.poppins-regular {
+    font-size: 2.15rem;
+}
+
+/* Sub-section headers (Quantitative/Qualitative Comparison, Acknowledgements)
+   -- share the .poppins-regular h3 class. */
+h3.poppins-regular {
+    font-size: 1.65rem;
+}
+
+/* Acknowledgements title: larger than the shared h3.poppins-regular size
+   above. */
+.ack-title {
+    font-size: 1.6rem !important;
+}
+
+/* Acknowledgements body text ("This webpage..."): smaller.
+   Root cause of every earlier attempt "not working" found and fixed at
+   the HTML level: the markup nested a <center> inside this <p>, and
+   <center> is one of the tags that implicitly closes an open <p> per the
+   HTML parsing spec -- so this class was landing on an empty, invisible
+   <p>, while the actual visible text lived in a bare, unstyled <center>
+   right after it. Fixed by dropping the nested <center> (index.html now
+   uses text-center on this <p> directly instead), so a plain font-size
+   rule works correctly again -- no transform/margin workaround needed. */
+.ack-text {
+    font-size: 9pt;
+}
+
+.anchor {
+    scroll-margin-top: 77px;
+}
+
+.content a:link, .content a:visited {
+    color: #1367a7;
+    text-decoration: none;
+}
+
+.content a:hover {
+    color: #208799;
+}
+
+hr {
+    border: 0;
+    height: 1px;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
+}
+
+#btn-back-to-top {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: none;
+}
+
+/* ----------------------- buttons ----------------------- */
+.btn-outline-info, .btn-outline-primary {
+    border-radius: 4rem !important;
+}
+
+.collapsing-button {
+    width: 205px;
+}
+
+/* ----------------------- slider ----------------------- */
+.custom-range {
+    width: 100%;
+    margin-top: 3px;
+}
+
+.range-slider {
+    position: relative;
+}
+
+.range-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #555;
+    margin-top: 2px;
+}
+
+img-comparison-slider:focus {
+    outline: none;
+}
+
+img-comparison-slider {
+    transition: transform 0.05s;
+    --default-handle-width: 50px;
+}
+
+img-comparison-slider:hover {
+    --default-handle-width: 67px;
+}
+
+.after, .before {
+    margin: 0;
+}
+
+figcaption, .overlay-box-left, .overlay-box-right {
+    background: #fff;
+    border-radius: 5px;
+    color: #2e3452;
+    opacity: 0.85;
+    padding: 3px 6px;
+    line-height: 130%;
+    position: absolute;
+    font-size: 13px;
+}
+
+/* Qualitative-comparison BPP/round-trip-time captions: BPP on one line,
+   seconds centered directly beneath it, not left-aligned under the wider
+   line's edge. */
+.qual-after-bpp, .qual-before-bpp {
+    text-align: center;
+}
+
+.overlay-box-left {
+    left: 3px;
+    top: 3px;
+}
+
+.overlay-box-right {
+    right: 3px;
+    top: 3px;
+}
+
+.after figcaption {
+    bottom: 3px;
+    right: 3px;
+}
+
+.before figcaption {
+    bottom: 3px;
+    left: 3px;
+}
+
+/* ----------------------- quantitative figures ----------------------- */
+.quant-figure {
+    max-width: 100%;
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+}
+
+.quant-caption {
+    font-size: 11pt;
+    color: #444;
+    margin-top: 8px;
+}
+
+/* ----------------------- qualitative comparison blocks ----------------------- */
+.qual-block {
+    max-width: 720px;
+    margin: 0 auto 24px auto;
+}
+
+.qual-block .btn-group-vertical {
+    min-width: 0;
+    max-width: 108px;
+    flex-shrink: 0;
+}
+
+.qual-block .btn-group-vertical .btn {
+    font-size: 11px;
+    padding: 3px 5px;
+    line-height: 1.2;
+    white-space: normal;
+}
+
+.coming-soon {
+    text-align: center;
+    color: #777;
+    font-size: 16pt;
+    padding: 40px 0;
+}
+
+/* ----------------------- video qualitative comparison blocks ----------------------- */
+/* Wider than .qual-block -- holds two side-by-side <video> players (Before |
+   Ours) instead of a single drag-slider image, since img-comparison-slider
+   does not support <video> content in its slots. */
+.video-qual-block {
+    max-width: 900px;
+    margin: 0 auto 24px auto;
+}
+
+.video-qual-block .btn-group-vertical {
+    min-width: 0;
+    max-width: 108px;
+    flex-shrink: 0;
+}
+
+.video-qual-block .btn-group-vertical .btn {
+    font-size: 11px;
+    padding: 3px 5px;
+    line-height: 1.2;
+    white-space: normal;
+}
+
+.video-frame {
+    position: relative;
+}
+
+.video-frame video {
+    width: 100%;
+    display: block;
+    border-radius: 4px;
+    background: #000;
+}
+
+.video-caption {
+    position: absolute;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 5px;
+    color: #2e3452;
+    opacity: 0.85;
+    padding: 3px 6px;
+    font-size: 12px;
+}
+
+.video-caption-left {
+    left: 3px;
+}
+
+.video-caption-right {
+    right: 3px;
+}
+
+/* ----------------------- BibTeX ----------------------- */
+pre.command-copy {
+    position: relative;
+    background: #f2f2f2;
+    color: #333;
+    padding: 1rem 3rem 1rem 1.25rem;
+    border-radius: 12px;
+    max-width: 850px;
+    margin: 0 auto;
+    font-size: 13px;
+    overflow-x: auto;
+}
+
+pre.command-copy #citation {
+    white-space: pre;
+}
+
+/* Absolutely positioned (not part of the flex/grid flow) so it reliably
+   sits in the top-right corner regardless of how many citation lines
+   there are -- a row/col layout nested inside a <pre> proved unreliable. */
+.copy-bib-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    border: 1px solid #ddd;
+}
+
+.copy-bib-btn:hover {
+    background: #e9e9e9;
+}
+
+/* --------------- fonts -------------- */
+.poppins-regular {
+    font-family: "Poppins", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.poppins-medium {
+    font-family: "Poppins", sans-serif;
+    font-weight: 500;
+    font-style: normal;
+}
+
+.poppins-semibold {
+    font-family: "Poppins", sans-serif;
+    font-weight: 600;
+    font-style: normal;
+}
+
+.roboto-400 {
+    font-family: "Roboto", serif;
+    font-weight: 400;
+    font-style: normal;
+}
