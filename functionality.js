@@ -383,6 +383,33 @@ document.addEventListener("DOMContentLoaded", function () {
             btn.textContent = btn.textContent.trim() === "Additional samples" ? "Hide samples" : "Additional samples";
         });
     });
+
+    // ---------------------------------------------------------------
+    // top navbar -- "Image Compression" / "Video Compression" links
+    // should open that section's accordion pane (not just scroll to its,
+    // possibly still-collapsed, header). The two panes share the same
+    // data-bs-parent, so opening one auto-closes the other via Bootstrap's
+    // own accordion behavior -- no need to close the sibling ourselves.
+    // ---------------------------------------------------------------
+    document.querySelectorAll('#main_nav .nav-link[href^="#"]').forEach(function (link) {
+        link.addEventListener("click", function (event) {
+            const section = document.querySelector(link.getAttribute("href"));
+            if (!section) {
+                return;
+            }
+            const pane = section.querySelector(".accordion-collapse");
+            if (!pane || pane.classList.contains("show")) {
+                return; // already open (or not an accordion section) -- let the default anchor jump happen
+            }
+            event.preventDefault();
+            const collapse = bootstrap.Collapse.getOrCreateInstance(pane, { toggle: false });
+            pane.addEventListener("shown.bs.collapse", function onShown() {
+                pane.removeEventListener("shown.bs.collapse", onShown);
+                section.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+            collapse.show();
+        });
+    });
 });
 
 // ---------------------------------------------------------------
