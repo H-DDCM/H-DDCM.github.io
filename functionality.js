@@ -155,17 +155,38 @@ document.addEventListener("DOMContentLoaded", function () {
     // only the 2nd/3rd loop (file now fully cached) played smoothly.
     // "canplaythrough"/readyState===4 (HAVE_ENOUGH_DATA) is the browser's
     // own estimate that the whole file can play through at the current
-    // download rate without stalling -- the right signal to wait for here.
+    // download rate without stalling -- the right signal to prefer here.
+    //
+    // BUGFIX 2: "canplaythrough" is only a heuristic ESTIMATE, and browsers
+    // don't guarantee it fires promptly -- or at all -- for every file/
+    // network condition (a transient CDN hiccup, a connection that looks
+    // slow enough that the browser's estimate never turns favorable, etc).
+    // Waiting on it with no fallback (the previous version of this fix)
+    // meant a single unlucky video could hang forever, and since both
+    // players are started together via Promise.all(), THAT ALSO BLOCKED
+    // THE OTHER, perfectly-fine player from ever playing -- exactly "some
+    // videos are stuck and do not play at all, or a single one of the two".
+    // Never let one flaky load block anything indefinitely: also resolve on
+    // "error" (so a genuinely failed fetch doesn't hang the pair either),
+    // and race the whole thing against a timeout as a last-resort escape
+    // hatch -- these are small clips, READY_TIMEOUT_MS is generous for a
+    // normal connection but still bounds the worst case.
+    var READY_TIMEOUT_MS = 4000;
     function loadVideoReady(videoEl, src) {
         return new Promise(function (resolve) {
+            function done() {
+                videoEl.removeEventListener("canplaythrough", done);
+                videoEl.removeEventListener("error", done);
+                clearTimeout(timeoutId);
+                resolve();
+            }
             if (videoEl.getAttribute("src") === src && videoEl.readyState === 4) {
                 resolve();
                 return;
             }
-            videoEl.addEventListener("canplaythrough", function onReady() {
-                videoEl.removeEventListener("canplaythrough", onReady);
-                resolve();
-            });
+            videoEl.addEventListener("canplaythrough", done);
+            videoEl.addEventListener("error", done);
+            var timeoutId = setTimeout(done, READY_TIMEOUT_MS);
             if (videoEl.getAttribute("src") !== src) {
                 videoEl.src = src;
                 videoEl.load();
