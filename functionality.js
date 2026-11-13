@@ -172,24 +172,44 @@ document.addEventListener("DOMContentLoaded", function () {
     // hatch -- these are small clips, READY_TIMEOUT_MS is generous for a
     // normal connection but still bounds the worst case.
     var READY_TIMEOUT_MS = 4000;
+    // BUGFIX 3 (slow "black screen" after clicking a method): the pair is
+    // paused while the new file loads, and browsers (Chrome especially, with
+    // the default preload="metadata") then often stop buffering early and
+    // never fire "canplaythrough" for a paused element -- so every first
+    // click on a method sat out the full READY_TIMEOUT_MS before playing.
+    // Two changes: force preload="auto" so buffering continues while paused,
+    // and treat "canplay" (enough to start) + READY_GRACE_MS as ready -- the
+    // grace window still lets "canplaythrough" win when it is about to fire,
+    // but the wait is now bounded by ~READY_GRACE_MS instead of 4 s.
+    var READY_GRACE_MS = 350;
     function loadVideoReady(videoEl, src) {
         return new Promise(function (resolve) {
+            var graceId = null;
             function done() {
                 videoEl.removeEventListener("canplaythrough", done);
+                videoEl.removeEventListener("canplay", onCanPlay);
                 videoEl.removeEventListener("error", done);
                 clearTimeout(timeoutId);
+                clearTimeout(graceId);
                 resolve();
+            }
+            function onCanPlay() {
+                if (graceId === null) graceId = setTimeout(done, READY_GRACE_MS);
             }
             if (videoEl.getAttribute("src") === src && videoEl.readyState === 4) {
                 resolve();
                 return;
             }
             videoEl.addEventListener("canplaythrough", done);
+            videoEl.addEventListener("canplay", onCanPlay);
             videoEl.addEventListener("error", done);
             var timeoutId = setTimeout(done, READY_TIMEOUT_MS);
+            videoEl.preload = "auto";
             if (videoEl.getAttribute("src") !== src) {
                 videoEl.src = src;
                 videoEl.load();
+            } else if (videoEl.readyState >= 3) {
+                onCanPlay();
             }
         });
     }
@@ -219,6 +239,24 @@ document.addEventListener("DOMContentLoaded", function () {
             const ours = point.methods.ours;
             refs.afterBpp.textContent = `${formatBpp(ours.bpp)} BPP`;
             return { videoEl: refs.afterVideo, src: `resources/video/${video}/${ours.file}` };
+        }
+
+        // Same availability rule as the image blocks: a method absent from
+        // this point (e.g. GVC-RT when its bpp is not close to the budget)
+        // gets a disabled, grayed-out "compare to" button; if it was the
+        // selected one, fall back to Original.
+        const originalRadio = block.querySelector('.compare-radio[data-method="original"]');
+        function updateVideoRadioAvailability(point) {
+            let checkedIsDisabled = false;
+            radios.forEach(function (r) {
+                const method = r.dataset.method;
+                const available = (method === "original") || Object.prototype.hasOwnProperty.call(point.methods, method);
+                r.disabled = !available;
+                const label = block.querySelector(`label[for="${r.id}"]`);
+                if (label) label.classList.toggle("disabled", !available);
+                if (r.checked && !available) checkedIsDisabled = true;
+            });
+            if (checkedIsDisabled) originalRadio.checked = true;
         }
 
         function updateVideoBefore(point) {
@@ -254,6 +292,7 @@ document.addEventListener("DOMContentLoaded", function () {
             // until BOTH players have buffered enough to play, then both
             // start together, in sync, from frame 0.
             const point = currentVideoPoint();
+            updateVideoRadioAvailability(point);
             const after = updateVideoAfter(point);
             const before = updateVideoBefore(point);
 
@@ -284,7 +323,42 @@ document.addEventListener("DOMContentLoaded", function () {
                     const p = v.play();
                     if (p !== undefined) p.catch(function () {});
                 });
+                watchdog(myGen, 0);
             });
+        }
+
+        // BUGFIX 4 (black screen until the user clicks away and back): if a
+        // player still has not really started shortly after the pair was
+        // released (load stalled, load timed out, play() was rejected...),
+        // nothing used to retry -- the clip stayed black until a fresh
+        // load was triggered by switching method/bpp and coming back.
+        // Now: WATCHDOG_MS after start, any player that is stuck near
+        // frame 0 (not enough data, or paused) is torn down and loaded
+        // again from scratch, then the pair is restarted together; at most
+        // WATCHDOG_RETRIES times, and only while this is still the latest
+        // refresh. A player that is merely rebuffering mid-playback
+        // (currentTime already advanced) is left alone.
+        const WATCHDOG_MS = 2500;
+        const WATCHDOG_RETRIES = 2;
+        function watchdog(myGen, attempt) {
+            setTimeout(function () {
+                if (myGen !== gen || attempt >= WATCHDOG_RETRIES) return;
+                const stuck = [refs.afterVideo, refs.beforeVideo].filter(function (v) {
+                    return v.getAttribute("src") && v.currentTime < 0.2 &&
+                           (v.readyState < 3 || v.paused);
+                });
+                if (!stuck.length) return;
+                Promise.all(stuck.map(function (v) {
+                    const src = v.getAttribute("src");
+                    v.removeAttribute("src");
+                    v.load();
+                    return loadVideoReady(v, src);
+                })).then(function () {
+                    if (myGen !== gen) return;
+                    restartBoth();
+                    watchdog(myGen, attempt + 1);
+                });
+            }, WATCHDOG_MS);
         }
 
         // Keep the two side-by-side players in lockstep. Both sources are
@@ -306,8 +380,15 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         }
         refs.afterVideo.addEventListener("timeupdate", function () {
-            if (Math.abs(refs.beforeVideo.currentTime - refs.afterVideo.currentTime) > SYNC_THRESHOLD_S) {
-                refs.beforeVideo.currentTime = refs.afterVideo.currentTime;
+            // BUGFIX 4b: only correct a follower that is actually playing
+            // with data to spare. Forcing a seek on one that is still
+            // loading/seeking/paused restarts its buffering every time
+            // this fires (it is "behind" precisely because it is still
+            // loading), which can starve the load and leave it black.
+            const f = refs.beforeVideo;
+            if (f.paused || f.seeking || f.readyState < 3) return;
+            if (Math.abs(f.currentTime - refs.afterVideo.currentTime) > SYNC_THRESHOLD_S) {
+                f.currentTime = refs.afterVideo.currentTime;
             }
         });
         refs.afterVideo.addEventListener("ended", restartBoth);
