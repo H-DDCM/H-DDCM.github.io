@@ -171,7 +171,10 @@ document.addEventListener("DOMContentLoaded", function () {
     // and race the whole thing against a timeout as a last-resort escape
     // hatch -- these are small clips, READY_TIMEOUT_MS is generous for a
     // normal connection but still bounds the worst case.
-    var READY_TIMEOUT_MS = 4000;
+    // Last-resort bound only: slow connections (e.g. a hosted page) can need
+    // well over 4 s for the first load of a pair, and starting early just
+    // desyncs/looks broken. The normal path resolves on canplay(+grace).
+    var READY_TIMEOUT_MS = 15000;
     // BUGFIX 3 (slow "black screen" after clicking a method): the pair is
     // paused while the new file loads, and browsers (Chrome especially, with
     // the default preload="metadata") then often stop buffering early and
@@ -323,42 +326,27 @@ document.addEventListener("DOMContentLoaded", function () {
                     const p = v.play();
                     if (p !== undefined) p.catch(function () {});
                 });
-                watchdog(myGen, 0);
+                nudge(myGen);
             });
         }
 
-        // BUGFIX 4 (black screen until the user clicks away and back): if a
-        // player still has not really started shortly after the pair was
-        // released (load stalled, load timed out, play() was rejected...),
-        // nothing used to retry -- the clip stayed black until a fresh
-        // load was triggered by switching method/bpp and coming back.
-        // Now: WATCHDOG_MS after start, any player that is stuck near
-        // frame 0 (not enough data, or paused) is torn down and loaded
-        // again from scratch, then the pair is restarted together; at most
-        // WATCHDOG_RETRIES times, and only while this is still the latest
-        // refresh. A player that is merely rebuffering mid-playback
-        // (currentTime already advanced) is left alone.
-        const WATCHDOG_MS = 2500;
-        const WATCHDOG_RETRIES = 2;
-        function watchdog(myGen, attempt) {
+        // Safety nudge (replaces an earlier "watchdog" that tore down and
+        // reloaded any player still near frame 0 after 2.5 s -- on a real
+        // network that restarted downloads that were merely slow, giving
+        // black panes that kept reloading and never played). This never
+        // reloads anything: if a player has data but is paused (play() was
+        // rejected / lost), just call play() again. Loading stays untouched.
+        const NUDGE_MS = 3000;
+        function nudge(myGen) {
             setTimeout(function () {
-                if (myGen !== gen || attempt >= WATCHDOG_RETRIES) return;
-                const stuck = [refs.afterVideo, refs.beforeVideo].filter(function (v) {
-                    return v.getAttribute("src") && v.currentTime < 0.2 &&
-                           (v.readyState < 3 || v.paused);
+                if (myGen !== gen) return;
+                [refs.afterVideo, refs.beforeVideo].forEach(function (v) {
+                    if (v.paused && !v.ended && v.readyState >= 2) {
+                        const p = v.play();
+                        if (p !== undefined) p.catch(function () {});
+                    }
                 });
-                if (!stuck.length) return;
-                Promise.all(stuck.map(function (v) {
-                    const src = v.getAttribute("src");
-                    v.removeAttribute("src");
-                    v.load();
-                    return loadVideoReady(v, src);
-                })).then(function () {
-                    if (myGen !== gen) return;
-                    restartBoth();
-                    watchdog(myGen, attempt + 1);
-                });
-            }, WATCHDOG_MS);
+            }, NUDGE_MS);
         }
 
         // Keep the two side-by-side players in lockstep. Both sources are
