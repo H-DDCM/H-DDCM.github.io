@@ -248,6 +248,142 @@ figcaption, .overlay-box-left, .overlay-box-right {
     right: 3px;
 }
 
+/* ----------------------- audio qualitative comparison ----------------------- */
+.audio-note {
+    font-size: 10.5pt;
+    color: #555;
+    max-width: 1060px;
+    margin: 0 auto 18px auto;
+    text-align: center;
+}
+
+.audio-block {
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+.audio-duration-title {
+    font-size: 1.35rem;
+    text-align: center;
+    margin: 22px 0 14px 0;
+}
+
+/* The 5 s and 15 s sets are separate, clearly divided blocks. */
+.audio-divider {
+    max-width: 960px;
+    margin: 34px auto 10px auto;
+}
+
+.audio-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 22px;
+    margin-bottom: 16px;
+}
+
+.audio-controls .btn {
+    font-size: 12px;
+    padding: 4px 9px;
+}
+
+/* One excerpt = one row: Original | Ours | EnCodec | Opus. */
+.audio-sample {
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+    padding: 10px 14px 6px 14px;
+    margin-bottom: 14px;
+}
+
+.audio-sample.audio-hidden {
+    display: none;
+}
+
+.audio-sample-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.audio-meta {
+    font-weight: 300;
+    color: #777;
+    font-size: 12px;
+}
+
+.audio-track-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #2e3452;
+}
+
+.audio-track[data-method="hddcm_b1"] .audio-track-name {
+    font-weight: 700;
+}
+
+.audio-player {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    margin-top: 3px;
+}
+
+.audio-play-btn {
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #2e3452;
+    border-radius: 50%;
+    background: #fff;
+    color: #2e3452;
+    font-size: 11px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+}
+
+.audio-play-btn:hover:not(:disabled) {
+    background: #2e3452;
+    color: #fff;
+}
+
+.audio-play-btn.loading {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.audio-play-btn:disabled {
+    cursor: default;
+}
+
+.audio-seek {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 14px;
+}
+
+.audio-time {
+    flex: 0 0 auto;
+    min-width: 30px;
+    font-size: 11.5px;
+    color: #777;
+    text-align: right;
+}
+
+.audio-track-kbps {
+    font-size: 11.5px;
+    color: #777;
+    min-height: 18px;
+    text-align: center;
+}
+
+/* Method not evaluated at the chosen bitrate (Opus at ~3 kbps): grayed out,
+   same idea as a disabled "Compare to" button elsewhere on the page. */
+.audio-track.unavailable {
+    opacity: 0.4;
+}
+
 /* ----------------------- BibTeX ----------------------- */
 pre.command-copy {
     position: relative;

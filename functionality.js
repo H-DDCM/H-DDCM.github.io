@@ -456,6 +456,165 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ---------------------------------------------------------------
+    // audio qualitative comparison (Extension: Audio Compression)
+    // ---------------------------------------------------------------
+    // Performance design: the page has ~160 tracks (41 excerpts x 4), so
+    // instead of one native <audio controls> element per track (each with its
+    // own media pipeline + controls DOM, and a src/load() churn on every
+    // category/bitrate switch) there is ONE shared Audio object and a light
+    // play/seek UI per track. Switching category or bitrate therefore only
+    // toggles visibility and updates text; a file is requested only when its
+    // track is played.
+    const audioPlayer = new Audio();
+    audioPlayer.preload = "auto";
+    let audioCurrent = null; // the .audio-track currently loaded in audioPlayer
+
+    function fmtTime(sec) {
+        if (!isFinite(sec) || sec < 0) sec = 0;
+        const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+        return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function trackParts(track) {
+        return {
+            btn: track.querySelector(".audio-play-btn"),
+            seek: track.querySelector(".audio-seek"),
+            time: track.querySelector(".audio-time"),
+        };
+    }
+
+    function resetTrackUi(track) {
+        if (!track) return;
+        const p = trackParts(track);
+        p.btn.innerHTML = "&#9654;";
+        p.btn.classList.remove("loading");
+        p.seek.value = 0;
+        p.seek.disabled = true;
+        p.time.textContent = "0:00";
+    }
+
+    function stopAudio() {
+        audioPlayer.pause();
+        if (audioCurrent) resetTrackUi(audioCurrent);
+        audioCurrent = null;
+    }
+
+    function trackSrc(track, rate) {
+        return track.dataset.method === "original" ? track.getAttribute("data-src")
+                                                   : track.getAttribute("data-src-" + rate);
+    }
+
+    function playTrack(track, rate) {
+        if (track === audioCurrent) {
+            if (audioPlayer.paused) audioPlayer.play().catch(function () {});
+            else audioPlayer.pause();
+            return;
+        }
+        stopAudio();
+        const src = trackSrc(track, rate);
+        if (!src) return;
+        audioCurrent = track;
+        const p = trackParts(track);
+        p.btn.classList.add("loading");
+        p.btn.innerHTML = "&hellip;";
+        audioPlayer.src = src;
+        audioPlayer.play().catch(function () {});
+    }
+
+    audioPlayer.addEventListener("loadedmetadata", function () {
+        if (audioCurrent) trackParts(audioCurrent).seek.disabled = false;
+    });
+    audioPlayer.addEventListener("playing", function () {
+        if (!audioCurrent) return;
+        const p = trackParts(audioCurrent);
+        p.btn.classList.remove("loading");
+        p.btn.innerHTML = "&#10074;&#10074;";
+    });
+    audioPlayer.addEventListener("pause", function () {
+        if (!audioCurrent || audioPlayer.ended) return;
+        const p = trackParts(audioCurrent);
+        // The previous track's pause event can arrive after the next track was
+        // already selected (still loading) -- don't flip that one back to play.
+        if (p.btn.classList.contains("loading")) return;
+        p.btn.innerHTML = "&#9654;";
+    });
+    audioPlayer.addEventListener("ended", stopAudio);
+    audioPlayer.addEventListener("error", function () {
+        if (!audioCurrent) return;
+        const p = trackParts(audioCurrent);
+        p.btn.classList.remove("loading");
+        p.btn.innerHTML = "&#9654;";
+        p.time.textContent = "error";
+        audioCurrent = null;
+    });
+    audioPlayer.addEventListener("timeupdate", function () {
+        if (!audioCurrent) return;
+        const p = trackParts(audioCurrent), d = audioPlayer.duration;
+        if (isFinite(d) && d > 0) p.seek.value = Math.round(audioPlayer.currentTime / d * 1000);
+        p.time.textContent = fmtTime(audioPlayer.currentTime);
+    });
+
+    // Each .audio-block is one duration (5 s / 15 s). A category radio shows
+    // only that category's excerpts; a bitrate radio (~3 / ~6 kbps) picks
+    // which file each track plays and updates its actual-kbps caption. A
+    // method with no file at the chosen rate (Opus at ~3 kbps) is grayed out
+    // (.unavailable), like a disabled "Compare to" button elsewhere.
+    function setupAudioBlock(block) {
+        const samples = Array.from(block.querySelectorAll(".audio-sample"));
+        const catRadios = Array.from(block.querySelectorAll(".audio-cat-radio"));
+        const rateRadios = Array.from(block.querySelectorAll(".audio-rate-radio"));
+
+        function checkedValue(radios, key) {
+            const r = radios.find(function (x) { return x.checked; });
+            return r ? r.dataset[key] : null;
+        }
+        function currentRate() { return checkedValue(rateRadios, "rate"); }
+
+        function applyCategory() {
+            const cat = checkedValue(catRadios, "category");
+            samples.forEach(function (sample) {
+                const hide = sample.dataset.category !== cat;
+                sample.classList.toggle("audio-hidden", hide);
+                if (hide && audioCurrent && sample.contains(audioCurrent)) stopAudio();
+            });
+        }
+
+        function applyRate() {
+            const rate = currentRate();
+            samples.forEach(function (sample) {
+                sample.querySelectorAll(".audio-track[data-method]").forEach(function (track) {
+                    if (track.dataset.method === "original") return;
+                    if (track === audioCurrent) stopAudio();
+                    const has = !!track.getAttribute("data-src-" + rate);
+                    track.classList.toggle("unavailable", !has);
+                    track.querySelector(".audio-play-btn").disabled = !has;
+                    track.querySelector(".audio-track-kbps").textContent = has
+                        ? track.getAttribute("data-kbps-" + rate) + " kbps"
+                        : "not evaluated at ~" + rate + " kbps";
+                });
+            });
+        }
+
+        block.addEventListener("click", function (event) {
+            const btn = event.target.closest(".audio-play-btn");
+            if (!btn || btn.disabled) return;
+            playTrack(btn.closest(".audio-track"), currentRate());
+        });
+        block.addEventListener("input", function (event) {
+            if (!event.target.classList.contains("audio-seek")) return;
+            const track = event.target.closest(".audio-track"), d = audioPlayer.duration;
+            if (track === audioCurrent && isFinite(d) && d > 0) {
+                audioPlayer.currentTime = event.target.value / 1000 * d;
+            }
+        });
+        catRadios.forEach(function (r) { r.addEventListener("change", applyCategory); });
+        rateRadios.forEach(function (r) { r.addEventListener("change", applyRate); });
+        applyCategory();
+        applyRate();
+    }
+    document.querySelectorAll(".audio-block").forEach(setupAudioBlock);
+
+    // ---------------------------------------------------------------
     // collapsible "additional samples" buttons (Bootstrap handles the
     // collapse itself; this just swaps the button's own label)
     // ---------------------------------------------------------------
